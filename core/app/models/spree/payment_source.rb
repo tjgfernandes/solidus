@@ -4,7 +4,7 @@ module Spree
   class PaymentSource < Spree::Base
     self.abstract_class = true
 
-    belongs_to :payment_method
+    belongs_to :payment_method, optional: true
 
     has_many :payments, as: :source
     has_many :wallet_payment_sources, class_name: 'Spree::WalletPaymentSource', as: :payment_source, inverse_of: :payment_source
@@ -23,9 +23,9 @@ module Spree
     end
 
     # @param payment [Spree::Payment] the payment we want to know if can be voided
-    # @return [Boolean] true when the payment is not failed or voided
+    # @return [Boolean] true when the payment is not failed, voided or invalid
     def can_void?(payment)
-      !payment.failed? && !payment.void?
+      payment.can_void?
     end
 
     # Indicates whether its possible to credit the payment.  Note that most

@@ -9,7 +9,7 @@ module Spree
       def index
         @credit_cards = user
           .credit_cards
-          .accessible_by(current_ability, :read)
+          .accessible_by(current_ability)
           .with_payment_profile
           .ransack(params[:q]).result
 
@@ -18,7 +18,7 @@ module Spree
       end
 
       def update
-        if @credit_card.update_attributes(credit_card_update_params)
+        if @credit_card.update(credit_card_update_params)
           respond_with(@credit_card, default_template: :show)
         else
           invalid_resource!(@credit_card)
@@ -29,7 +29,7 @@ module Spree
 
       def user
         if params[:user_id].present?
-          @user ||= Spree.user_class.accessible_by(current_ability, :read).find(params[:user_id])
+          @user ||= Spree.user_class.accessible_by(current_ability, :show).find(params[:user_id])
         end
       end
 

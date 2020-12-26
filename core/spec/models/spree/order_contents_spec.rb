@@ -134,7 +134,7 @@ RSpec.describe Spree::OrderContents, type: :model do
 
       context 'when the order does not have a taxable address' do
         before do
-          order.update_attributes!(ship_address: nil, bill_address: nil)
+          order.update!(ship_address: nil, bill_address: nil)
           expect(order.tax_address.country_id).to be_nil
         end
 
@@ -301,7 +301,13 @@ RSpec.describe Spree::OrderContents, type: :model do
   end
 
   context "completed order" do
-    let(:order) { Spree::Order.create! state: 'complete', completed_at: Time.current }
+    let(:order) do
+      Spree::Order.create!(
+        state: 'complete',
+        completed_at: Time.current,
+        email: "test@example.com"
+      )
+    end
 
     before { order.shipments.create! stock_location_id: variant.stock_location_ids.first }
 

@@ -17,8 +17,8 @@ module Spree
         shipping_category_id: create(:shipping_category).id }
     end
     let(:attributes_for_variant) do
-      h = attributes_for(:variant).except(:option_values, :product)
-      h.merge({
+      attributes = attributes_for(:variant).except(:option_values, :product)
+      attributes.merge({
         options: [
           { name: "size", value: "small" },
           { name: "color", value: "black" }
@@ -40,7 +40,7 @@ module Spree
 
         it "returns unique products" do
           get spree.api_products_path
-          product_ids = json_response["products"].map { |p| p["id"] }
+          product_ids = json_response["products"].map { |product| product["id"] }
           expect(product_ids.uniq.count).to eq(product_ids.count)
         end
 
@@ -125,9 +125,9 @@ module Spree
       end
 
       it "gets a single product" do
-        product.master.images.create!(attachment: image("thinking-cat.jpg"))
+        product.master.images.create!(attachment: image("blank.jpg"))
         product.variants.create!
-        product.variants.first.images.create!(attachment: image("thinking-cat.jpg"))
+        product.variants.first.images.create!(attachment: image("blank.jpg"))
         product.set_property("spree", "rocks")
         product.taxons << create(:taxon)
 
@@ -158,15 +158,13 @@ module Spree
       end
 
       context "tracking is disabled" do
-        before { Config.track_inventory_levels = false }
+        before { stub_spree_preferences(track_inventory_levels: false) }
 
         it "still displays valid json with total_on_hand Float::INFINITY" do
           get spree.api_product_path(product)
           expect(response).to be_ok
           expect(json_response[:total_on_hand]).to eq nil
         end
-
-        after { Config.track_inventory_levels = true }
       end
 
       context "finds a product by slug first then by id" do
@@ -295,6 +293,23 @@ module Spree
           expect(json_response['shipping_category_id']).to eq shipping_id
         end
 
+        context "when tracking is disabled" do
+          before { stub_spree_preferences(track_inventory_levels: false) }
+
+          it "still displays valid json with total_on_hand Float::INFINITY" do
+            post spree.api_products_path, params: {
+              product: {
+                name: "The Other Product",
+                price: 19.99,
+                shipping_category_id: create(:shipping_category).id
+              }
+            }
+
+            expect(response.status).to eq(201)
+            expect(json_response['total_on_hand']).to eq nil
+          end
+        end
+
         it "puts the created product in the given taxon" do
           product_data[:taxon_ids] = taxon_1.id.to_s
           post spree.api_products_path, params: { product: product_data }
@@ -311,11 +326,7 @@ module Spree
         # Regression test for https://github.com/spree/spree/issues/2140
         context "with authentication_required set to false" do
           before do
-            Spree::Api::Config.requires_authentication = false
-          end
-
-          after do
-            Spree::Api::Config.requires_authentication = true
+            stub_spree_preferences(Spree::Api::Config, requires_authentication: false)
           end
 
           it "can still create a product" do
@@ -350,8 +361,8 @@ module Spree
           expect(response.status).to eq 200
           expect(json_response['variants'].count).to eq(2) # 2 variants
 
-          variants = json_response['variants'].reject { |v| v['is_master'] }
-          size_option_value = variants.last['option_values'].detect{ |x| x['option_type_name'] == 'size' }
+          variants = json_response['variants'].reject { |variant| variant['is_master'] }
+          size_option_value = variants.last['option_values'].detect{ |value| value['option_type_name'] == 'size' }
           expect(size_option_value['name']).to eq('small')
 
           expect(json_response['option_types'].count).to eq(2) # size, color
@@ -374,7 +385,7 @@ module Spree
           } }
 
           expect(json_response['variants'].count).to eq(1)
-          variants = json_response['variants'].reject { |v| v['is_master'] }
+          variants = json_response['variants'].reject { |variant| variant['is_master'] }
           expect(variants.last['option_values'][0]['name']).to eq('large')
           expect(variants.last['sku']).to eq('456')
           expect(variants.count).to eq(1)

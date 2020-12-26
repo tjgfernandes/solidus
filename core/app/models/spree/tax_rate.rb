@@ -1,14 +1,8 @@
 # frozen_string_literal: true
 
-require 'discard'
-
 module Spree
   class TaxRate < Spree::Base
-    acts_as_paranoid
-    include Spree::ParanoiaDeprecations
-
-    include Discard::Model
-    self.discard_column = :deleted_at
+    include Spree::SoftDeletable
 
     # Need to deal with adjustments before calculator is destroyed.
     before_destroy :remove_adjustments_from_incomplete_orders
@@ -17,7 +11,7 @@ module Spree
     include Spree::CalculatedAdjustments
     include Spree::AdjustmentSource
 
-    belongs_to :zone, class_name: "Spree::Zone", inverse_of: :tax_rates
+    belongs_to :zone, class_name: "Spree::Zone", inverse_of: :tax_rates, optional: true
 
     has_many :tax_rate_tax_categories,
       class_name: 'Spree::TaxRateTaxCategory',
@@ -37,6 +31,12 @@ module Spree
     scope :for_address, ->(address) { joins(:zone).merge(Spree::Zone.for_address(address)) }
     scope :for_country,
           ->(country) { for_address(Spree::Tax::TaxLocation.new(country: country)) }
+    scope :active, -> do
+      table = arel_table
+      time = Time.current
+      where(table[:starts_at].eq(nil).or(table[:starts_at].lt(time))).
+        where(table[:expires_at].eq(nil).or(table[:expires_at].gt(time)))
+    end
 
     # Finds geographically matching tax rates for a tax zone.
     # We do not know if they are/aren't applicable until we attempt to apply these rates to
@@ -88,7 +88,11 @@ module Spree
     scope :included_in_price, -> { where(included_in_price: true) }
 
     # Creates necessary tax adjustments for the order.
+    #
+    # @deprecated Please use `Spree::Tax::OrderAdjuster#adjust!` instead
     def adjust(_order_tax_zone, item)
+      Spree::Deprecation.warn("`Spree::TaxRate#adjust` is deprecated. Please use `Spree::Tax::OrderAdjuster#adjust!` instead.", caller)
+
       amount = compute_amount(item)
 
       item.adjustments.create!(

@@ -22,6 +22,7 @@ module Spree
         :state_attributes,
         :adjustment_attributes,
         :inventory_unit_attributes,
+        :customer_return_attributes,
         :return_authorization_attributes,
         :creditcard_attributes,
         :payment_source_attributes,
@@ -40,7 +41,7 @@ module Spree
 
       def required_fields_for(model)
         required_fields = model._validators.select do |_field, validations|
-          validations.any? { |v| v.is_a?(ActiveModel::Validations::PresenceValidator) }
+          validations.any? { |validation| validation.is_a?(ActiveModel::Validations::PresenceValidator) }
         end.map(&:first) # get fields that are invalid
         # Permalinks presence is validated, but are really automatically generated
         # Therefore we shouldn't tell API clients that they MUST send one through
@@ -117,15 +118,26 @@ module Spree
         :id, :state, :variant_id, :shipment_id
       ]
 
+      @@customer_return_attributes = [
+        :id, :number, :stock_location_id, :created_at, :updated_at
+      ]
+
       @@return_authorization_attributes = [
         :id, :number, :state, :order_id, :memo, :created_at, :updated_at
       ]
 
-      @@address_attributes = [
-        :id, :firstname, :lastname, :full_name, :address1, :address2, :city,
-        :zipcode, :phone, :company, :alternative_phone, :country_id, :country_iso,
-        :state_id, :state_name, :state_text
+      @@address_base_attributes = [
+        :id, :name, :address1, :address2, :city, :zipcode, :phone, :company,
+        :alternative_phone, :country_id, :country_iso, :state_id, :state_name,
+        :state_text
       ]
+
+      @@address_attributes = if Spree::Config.use_combined_first_and_last_name_in_address
+                               @@address_base_attributes
+                             else
+                               @@address_base_attributes +
+                                 Spree::Address::LEGACY_NAME_ATTRS.map(&:to_sym)
+                             end
 
       @@country_attributes = [:id, :iso_name, :iso, :iso3, :name, :numcode]
 
@@ -168,7 +180,8 @@ module Spree
 
       @@store_attributes = [
         :id, :name, :url, :meta_description, :meta_keywords, :seo_title,
-        :mail_from_address, :default_currency, :code, :default, :available_locales
+        :mail_from_address, :default_currency, :code, :default, :available_locales,
+        :bcc_email
       ]
 
       @@store_credit_history_attributes = [
@@ -177,11 +190,15 @@ module Spree
       ]
 
       def variant_attributes
-        if @current_user_roles && @current_user_roles.include?("admin")
+        if @current_user_roles&.include?("admin")
           @@variant_attributes + [:cost_price]
         else
           @@variant_attributes
         end
+      end
+
+      def total_on_hand_for(object)
+        object.total_on_hand.finite? ? object.total_on_hand : nil
       end
     end
   end

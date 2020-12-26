@@ -21,8 +21,9 @@ describe "Orders Listing", type: :feature, js: true do
 
   context 'without create permission' do
     custom_authorization! do |_user|
-      can :manage, Spree::Order
-      cannot :create, Spree::Order
+      cannot :manage, Spree::Order
+      can :admin, Spree::Order
+      can :read, Spree::Order
     end
 
     it 'does not display the new order button' do
@@ -114,12 +115,7 @@ describe "Orders Listing", type: :feature, js: true do
 
       context "when pagination is really short" do
         before do
-          @old_per_page = Spree::Config[:orders_per_page]
-          Spree::Config[:orders_per_page] = 1
-        end
-
-        after do
-          Spree::Config[:orders_per_page] = @old_per_page
+          stub_spree_preferences(orders_per_page: 1)
         end
 
         # Regression test for https://github.com/spree/spree/issues/4004

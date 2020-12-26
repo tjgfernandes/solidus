@@ -58,7 +58,8 @@ module Spree
 
       describe "#allocate_inventory" do
         it 'is deprecated' do
-          expect(Spree::Deprecation).to receive(:warn)
+          expect(Spree::Deprecation).to receive(:warn).
+            with(/^allocate_inventory is deprecated and will be removed/, any_args)
           subject.send :allocate_inventory, subject.instance_variable_get(:@availability).on_hand_by_stock_location_id
         end
       end
@@ -90,8 +91,8 @@ module Spree
 
           expect(shipments.size).to eq 2
 
-          location_1_shipment = shipments.detect { |p| p.stock_location == stock_location_1 }
-          location_2_shipment = shipments.detect { |p| p.stock_location == stock_location_2 }
+          location_1_shipment = shipments.detect { |shipment| shipment.stock_location == stock_location_1 }
+          location_2_shipment = shipments.detect { |shipment| shipment.stock_location == stock_location_2 }
 
           expect(location_1_shipment).to be_present
           expect(location_2_shipment).to be_present
@@ -107,8 +108,8 @@ module Spree
         let!(:variant) { create(:variant, track_inventory: true) }
 
         before do
-          stock_item1 = variant.stock_items.create!(stock_location: stock_location_1, backorderable: false)
-          stock_item1.set_count_on_hand(location_1_inventory)
+          stock_item_one = variant.stock_items.create!(stock_location: stock_location_1, backorderable: false)
+          stock_item_one.set_count_on_hand(location_1_inventory)
         end
 
         let!(:order) { create(:order) }
@@ -119,7 +120,7 @@ module Spree
         shared_examples "a fulfillable package" do
           it "packages correctly" do
             expect(shipments).not_to be_empty
-            inventory_units = shipments.flat_map { |s| s.inventory_units }
+            inventory_units = shipments.flat_map(&:inventory_units)
             expect(inventory_units.size).to eq(5)
             expect(inventory_units.uniq.size).to eq(5)
           end
@@ -128,6 +129,14 @@ module Spree
         shared_examples "an unfulfillable package" do
           it "raises exception" do
             expect{ shipments }.to raise_error(Spree::Order::InsufficientStock)
+          end
+
+          it 'raises exception and includes unfulfillable items' do
+            begin
+              expect(shipments).not_to be_empty
+            rescue Spree::Order::InsufficientStock => e
+              expect(e.items.keys.map(&:id)).to contain_exactly(variant.id)
+            end
           end
         end
 
@@ -157,8 +166,8 @@ module Spree
         context 'with two stock locations' do
           let!(:stock_location_2) { create(:stock_location, propagate_all_variants: false, active: true) }
           before do
-            stock_item2 = variant.stock_items.create!(stock_location: stock_location_2, backorderable: false)
-            stock_item2.set_count_on_hand(location_2_inventory)
+            stock_item_two = variant.stock_items.create!(stock_location: stock_location_2, backorderable: false)
+            stock_item_two.set_count_on_hand(location_2_inventory)
           end
 
           context "with no inventory" do
@@ -214,11 +223,11 @@ module Spree
           let!(:stock_location_2) { create(:stock_location, propagate_all_variants: false, active: true) }
           let!(:stock_location_3) { create(:stock_location, propagate_all_variants: false, active: true) }
           before do
-            stock_item2 = variant.stock_items.create!(stock_location: stock_location_2, backorderable: false)
-            stock_item2.set_count_on_hand(location_2_inventory)
+            stock_item_two = variant.stock_items.create!(stock_location: stock_location_2, backorderable: false)
+            stock_item_two.set_count_on_hand(location_2_inventory)
 
-            stock_item3 = variant.stock_items.create!(stock_location: stock_location_3, backorderable: false)
-            stock_item3.set_count_on_hand(location_3_inventory)
+            stock_item_three = variant.stock_items.create!(stock_location: stock_location_3, backorderable: false)
+            stock_item_three.set_count_on_hand(location_3_inventory)
           end
 
           # Regression test for https://github.com/solidusio/solidus/issues/2122

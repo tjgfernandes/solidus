@@ -2,7 +2,7 @@
 
 module Spree
   class CustomerReturn < Spree::Base
-    belongs_to :stock_location
+    belongs_to :stock_location, optional: true
 
     has_many :return_items, inverse_of: :customer_return
     has_many :return_authorizations, through: :return_items
@@ -17,6 +17,8 @@ module Spree
 
     accepts_nested_attributes_for :return_items
 
+    self.whitelisted_ransackable_attributes = ['number']
+
     extend DisplayMoney
     money_methods :pre_tax_total, :total, :total_excluding_vat, :amount
     deprecate display_pre_tax_total: :display_total_excluding_vat, deprecator: Spree::Deprecation
@@ -25,11 +27,11 @@ module Spree
     delegate :id, to: :order, prefix: true, allow_nil: true
 
     def total
-      return_items.map(&:total).sum
+      return_items.sum(&:total)
     end
 
     def total_excluding_vat
-      return_items.map(&:total_excluding_vat).sum
+      return_items.sum(&:total_excluding_vat)
     end
     alias pre_tax_total total_excluding_vat
     deprecate pre_tax_total: :total_excluding_vat, deprecator: Spree::Deprecation
@@ -53,7 +55,7 @@ module Spree
     end
 
     def process_return!
-      order.return! if order.all_inventory_units_returned?
+      order.return! if order.can_return?
     end
 
     private

@@ -154,17 +154,65 @@ describe "New Order", type: :feature do
       click_on "Update"
 
       # Automatically redirected to Shipments page
-      select2_search product.name, from: I18n.t('spree.name_or_sku')
+      within '.no-objects-found' do
+        click_on "Cart"
+      end
 
-      click_icon :plus
-
-      expect(page).to have_css('.stock-item')
+      add_line_item product.name
 
       click_on "Payments"
-      click_on "Continue"
+      click_on "Update"
 
       within(".additional-info") do
         expect(page).to have_content("Confirm")
+      end
+    end
+  end
+
+  context "when changing customer", :js do
+    let!(:other_user) { create :user, bill_address: bill_address }
+
+    context "when one customer address have only textual state" do
+      let(:country) { create :country, iso: "IT" }
+      let(:bill_address) { create :address, country: country, state: nil, state_name: "Veneto" }
+
+      it "changes the bill address state accordingly" do
+        click_on "Customer"
+
+        within "#select-customer" do
+          targetted_select2_search user.email, from: "#s2id_customer_search"
+        end
+
+        expect(find("select#order_bill_address_attributes_state_id").value).to eq user.bill_address.state_id.to_s
+
+        within "#select-customer" do
+          targetted_select2_search other_user.email, from: "#s2id_customer_search"
+        end
+
+        expect(find("select#order_bill_address_attributes_state_id", visible: false).value).to eq ""
+        expect(find("#order_bill_address_attributes_state_name").value).to eq other_user.bill_address.state_name
+      end
+    end
+
+    context "when customers have same country but different state" do
+      let(:different_state) { Spree::State.where.not(id: user.bill_address.state_id).first }
+
+      let(:bill_address) { create :address, country: user.bill_address.country, state: different_state }
+
+      it "changes the bill address state accordingly" do
+        click_on "Customer"
+
+        within "#select-customer" do
+          targetted_select2_search user.email, from: "#s2id_customer_search"
+        end
+
+        expect(find('#order_bill_address_attributes_state_id').value).to eq user.bill_address.state_id.to_s
+
+        within "#select-customer" do
+          targetted_select2_search other_user.email, from: "#s2id_customer_search"
+        end
+
+        expect(find('#order_bill_address_attributes_state_id').value).to eq other_user.bill_address.state_id.to_s
       end
     end
   end
@@ -197,7 +245,7 @@ describe "New Order", type: :feature do
     it "displays the user's email escaped without executing" do
       click_on "Customer"
       targetted_select2_search user.email, from: "#s2id_customer_search"
-      expect(page).to have_field("Customer E-Mail", with: xss_string)
+      expect(page).to have_field("Customer Email", with: xss_string)
     end
   end
 
@@ -208,12 +256,12 @@ describe "New Order", type: :feature do
 
     before do
       Spree::Country.update_all(states_required: true)
-      Spree::Config.checkout_zone = checkout_zone.name
+      stub_spree_preferences(checkout_zone: checkout_zone.name)
     end
 
     context 'and default_country_iso of the United States' do
       before do
-        Spree::Config.default_country_iso = Spree::Country.find_by!(iso: 'US').iso
+        stub_spree_preferences(default_country_iso: Spree::Country.find_by!(iso: 'US').iso)
       end
 
       it 'the shipping address country select includes only options for Canada' do
@@ -267,7 +315,7 @@ describe "New Order", type: :feature do
 
     context 'and default_country_iso of Canada' do
       before do
-        Spree::Config.default_country_iso = Spree::Country.find_by!(iso: 'CA').iso
+        stub_spree_preferences(default_country_iso: Spree::Country.find_by!(iso: 'CA').iso)
       end
 
       it 'defaults the shipping address country to Canada' do
@@ -319,8 +367,7 @@ describe "New Order", type: :feature do
   end
 
   def fill_in_address
-    fill_in "First Name",                with: "John 99"
-    fill_in "Last Name",                 with: "Doe"
+    fill_in "Name",                      with: "John 99 Doe"
     fill_in "Street Address",            with: "100 first lane"
     fill_in "Street Address (cont'd)",   with: "#101"
     fill_in "City",                      with: "Bethesda"

@@ -13,7 +13,7 @@
 # targeted by the rule, the properties will automatically apply to the variant.
 module Spree
   class VariantPropertyRule < Spree::Base
-    belongs_to :product, touch: true
+    belongs_to :product, touch: true, optional: true
 
     has_many :values, class_name: 'Spree::VariantPropertyRuleValue', dependent: :destroy
     has_many :properties, through: :values
@@ -38,7 +38,11 @@ module Spree
     # @param variant [Spree::Variant] variant to check
     # @return [Boolean]
     def applies_to_variant?(variant)
-      (option_value_ids & variant.option_value_ids).present?
+      if apply_to_all
+        matches_option_value_ids?(variant.option_value_ids)
+      else
+        (option_value_ids & variant.option_value_ids).present?
+      end
     end
   end
 end

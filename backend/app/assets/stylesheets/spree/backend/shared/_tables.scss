@@ -47,12 +47,12 @@ table {
 
       button[class*='fa-'] {
         color: $link-color;
-        background-color: transparent;
+        background: transparent;
         border: 0 none;
         padding: 0 !important;
 
         &:hover {
-          background-color: transparent;
+          background: transparent;
         }
       }
 
@@ -61,7 +61,7 @@ table {
         padding-left: 0px;
 
         &:hover {
-          color: $color-3;
+          color: $color-dark-light;
         }
       }
 
@@ -108,14 +108,14 @@ table {
   }
 
   th a {
-    color: $color-4;
+    color: $color-dark;
   }
 
   tbody {
     tr {
       &.deleted td {
-        background-color: very-light(theme-color("danger"), 6);
-        border-color: very-light(theme-color("danger"), 15);
+        background-color: lighten(theme-color("danger"), 6);
+        border-color: lighten(theme-color("danger"), 15);
       }
     }
 

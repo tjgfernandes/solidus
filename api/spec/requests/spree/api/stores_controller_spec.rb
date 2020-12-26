@@ -32,7 +32,8 @@ module Spree
             "meta_description" => nil,
             "meta_keywords" => nil,
             "seo_title" => nil,
-            "mail_from_address" => "spree@example.org",
+            "mail_from_address" => "solidus@example.org",
+            "bcc_email" => nil,
             "default_currency" => nil,
             "code" => store.code,
             "default" => true,
@@ -45,7 +46,8 @@ module Spree
             "meta_description" => nil,
             "meta_keywords" => nil,
             "seo_title" => nil,
-            "mail_from_address" => "spree@example.org",
+            "mail_from_address" => "solidus@example.org",
+            "bcc_email" => nil,
             "default_currency" => nil,
             "code" => non_default_store.code,
             "default" => false,
@@ -63,7 +65,8 @@ module Spree
           "meta_description" => nil,
           "meta_keywords" => nil,
           "seo_title" => nil,
-          "mail_from_address" => "spree@example.org",
+          "mail_from_address" => "solidus@example.org",
+          "bcc_email" => nil,
           "default_currency" => nil,
           "code" => store.code,
           "default" => true,
@@ -85,12 +88,14 @@ module Spree
       it "can update an existing store" do
         store_hash = {
           url: "spree123.example.com",
-          mail_from_address: "me@example.com"
+          mail_from_address: "me@example.com",
+          bcc_email: "bcc@example.net"
         }
         put spree.api_store_path(store), params: { store: store_hash }
         expect(response.status).to eq(200)
         expect(store.reload.url).to eql "spree123.example.com"
         expect(store.reload.mail_from_address).to eql "me@example.com"
+        expect(store.reload.bcc_email).to eql "bcc@example.net"
       end
 
       context "deleting a store" do

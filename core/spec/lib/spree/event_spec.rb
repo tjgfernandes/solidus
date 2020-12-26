@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
-require 'spree/event'
+require 'rails_helper'
 
 RSpec.describe Spree::Event do
   let(:subscription_name) { 'foo_bar' }
@@ -14,21 +13,33 @@ RSpec.describe Spree::Event do
     expect(subject.adapter).to eql Spree::Event::Adapters::ActiveSupportNotifications
   end
 
-  before do
-    # ActiveSupport::Notifications does not provide an interface to clean all
-    # subscribers at once, so some low level brittle code is required
-    @old_subscribers = notifier.instance_variable_get('@subscribers').dup
-    @old_listeners = notifier.instance_variable_get('@listeners_for').dup
-    notifier.instance_variable_get('@subscribers').clear
-    notifier.instance_variable_get('@listeners_for').clear
-  end
-
-  after do
-    notifier.instance_variable_set '@subscribers', @old_subscribers
-    notifier.instance_variable_set '@listeners_for', @old_listeners
-  end
-
   context 'with the default adapter' do
+    before do
+      # ActiveSupport::Notifications does not provide an interface to clean all
+      # subscribers at once, so some low level brittle code is required
+      if Rails.gem_version >= Gem::Version.new('6.0.0')
+        @old_string_subscribers = notifier.instance_variable_get('@string_subscribers').dup
+        @old_other_subscribers = notifier.instance_variable_get('@other_subscribers').dup
+        notifier.instance_variable_get('@string_subscribers').clear
+        notifier.instance_variable_get('@other_subscribers').clear
+      else
+        @old_subscribers = notifier.instance_variable_get('@subscribers').dup
+        notifier.instance_variable_get('@subscribers').clear
+      end
+      @old_listeners = notifier.instance_variable_get('@listeners_for').dup
+      notifier.instance_variable_get('@listeners_for').clear
+    end
+
+    after do
+      if Rails.gem_version >= Gem::Version.new('6.0.0')
+        notifier.instance_variable_set '@string_subscribers', @old_string_subscribers
+        notifier.instance_variable_set '@other_subscribers', @old_other_subscribers
+      else
+        notifier.instance_variable_set '@subscribers', @old_subscribers
+      end
+      notifier.instance_variable_set '@listeners_for', @old_listeners
+    end
+
     describe '#listeners' do
       context 'when there is no subscription' do
         it { expect(subject.listeners).to be_empty }
@@ -54,6 +65,13 @@ RSpec.describe Spree::Event do
           Spree::Event.subscribe(subscription_name) { item.do_something }
           Spree::Event.fire subscription_name
           expect(item).to have_received :do_something
+        end
+
+        it 'can subscribe to multiple events using a regexp' do
+          Spree::Event.subscribe(/.*\.spree$/) { item.do_something_else }
+          Spree::Event.fire subscription_name
+          Spree::Event.fire 'another_event'
+          expect(item).to have_received(:do_something_else).twice
         end
       end
 

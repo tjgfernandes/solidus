@@ -11,6 +11,10 @@ RSpec.describe Spree::StockMovement, type: :model do
     expect(subject).to respond_to(:stock_item)
   end
 
+  it 'should have a variant' do
+    expect(subject).to respond_to(:variant)
+  end
+
   it 'is readonly unless new' do
     subject.save
     expect {
@@ -19,7 +23,7 @@ RSpec.describe Spree::StockMovement, type: :model do
   end
 
   it 'does not update count on hand when track inventory levels is false' do
-    Spree::Config[:track_inventory_levels] = false
+    stub_spree_preferences(track_inventory_levels: false)
     subject.quantity = 1
     subject.save
     stock_item.reload

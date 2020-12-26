@@ -189,7 +189,7 @@ RSpec.describe Spree::CustomerReturn, type: :model do
 
       context 'with Config.track_inventory_levels == false' do
         before do
-          Spree::Config.track_inventory_levels = false
+          stub_spree_preferences(track_inventory_levels: false)
           expect(Spree::StockItem).not_to receive(:find_by)
           expect(Spree::StockMovement).not_to receive(:create!)
         end
@@ -233,7 +233,7 @@ RSpec.describe Spree::CustomerReturn, type: :model do
 
     context "it was not received" do
       before do
-        return_item.update_attributes!(reception_status: "lost_in_transit")
+        return_item.update!(reception_status: "lost_in_transit")
       end
 
       it 'should not updated inventory unit to returned' do

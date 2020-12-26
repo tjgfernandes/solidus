@@ -36,7 +36,7 @@ RSpec.describe Spree::LegacyUser, type: :model do
 
     context "with completable_order_created_cutoff set" do
       before do
-        Spree::Config.completable_order_created_cutoff_days = 1
+        stub_spree_preferences(completable_order_created_cutoff_days: 1)
       end
 
       it "excludes orders updated outside of the cutoff date" do
@@ -47,7 +47,7 @@ RSpec.describe Spree::LegacyUser, type: :model do
 
     context "with completable_order_created_cutoff set" do
       before do
-        Spree::Config.completable_order_updated_cutoff_days = 1
+        stub_spree_preferences(completable_order_updated_cutoff_days: 1)
       end
 
       it "excludes orders updated outside of the cutoff date" do
@@ -93,10 +93,13 @@ RSpec.describe Spree::LegacyUser, type: :model do
         create(:credit_card, user_id: user.id, payment_method: payment_method, gateway_customer_profile_id: "2342343")
       end
 
+      before do
+        expect(Spree::Deprecation).to receive(:warn).
+          with(/^user.payment_sources is deprecated/, any_args)
+      end
+
       it "has payment sources" do
-        Spree::Deprecation.silence do
-          expect(user.payment_sources.first.gateway_customer_profile_id).not_to be_empty
-        end
+        expect(user.payment_sources.first.gateway_customer_profile_id).not_to be_empty
       end
     end
   end
@@ -174,10 +177,10 @@ RSpec.describe Spree.user_class, type: :model do
   describe "#total_available_store_credit" do
     before do
       allow_any_instance_of(Spree::LegacyUser).to receive(:total_available_store_credit).and_wrap_original do |method, *args|
-        Spree::Deprecation.silence do
-          method.call(*args)
-        end
+        method.call(*args)
       end
+      expect(Spree::Deprecation).to receive(:warn).
+        with(/^total_available_store_credit is deprecated and will be removed/, any_args)
     end
 
     context "user does not have any associated store credits" do
@@ -200,12 +203,12 @@ RSpec.describe Spree.user_class, type: :model do
       context "part of the store credit has been used" do
         let(:amount_used) { 35.00 }
 
-        before { store_credit.update_attributes(amount_used: amount_used) }
+        before { store_credit.update(amount_used: amount_used) }
 
         context "part of the store credit has been authorized" do
           let(:authorized_amount) { 10 }
 
-          before { additional_store_credit.update_attributes(amount_authorized: authorized_amount) }
+          before { additional_store_credit.update(amount_authorized: authorized_amount) }
 
           it "returns sum of amounts minus used amount and authorized amount" do
             expect(subject.total_available_store_credit.to_f).to eq(amount + additional_amount - amount_used - authorized_amount)
@@ -223,7 +226,7 @@ RSpec.describe Spree.user_class, type: :model do
         context "part of the store credit has been authorized" do
           let(:authorized_amount) { 10 }
 
-          before { additional_store_credit.update_attributes(amount_authorized: authorized_amount) }
+          before { additional_store_credit.update(amount_authorized: authorized_amount) }
 
           it "returns sum of amounts minus authorized amount" do
             expect(subject.total_available_store_credit.to_f).to eq(amount + additional_amount - authorized_amount)

@@ -7,7 +7,7 @@ module Spree
 
     attr_reader :eligibility_errors
 
-    belongs_to :promotion_category
+    belongs_to :promotion_category, optional: true
 
     has_many :promotion_rules, autosave: true, dependent: :destroy, inverse_of: :promotion
     alias_method :rules, :promotion_rules
@@ -28,26 +28,38 @@ module Spree
     validates_associated :rules
 
     validates :name, presence: true
-    validates :path, uniqueness: { allow_blank: true }
+    validates :path, uniqueness: { allow_blank: true, case_sensitive: true }
     validates :usage_limit, numericality: { greater_than: 0, allow_nil: true }
     validates :per_code_usage_limit, numericality: { greater_than_or_equal_to: 0, allow_nil: true }
     validates :description, length: { maximum: 255 }
-    validate :apply_automatically_disallowed_with_codes_or_paths
+    validate :apply_automatically_disallowed_with_paths
 
     before_save :normalize_blank_values
 
     scope :coupons, -> { joins(:codes).distinct }
     scope :advertised, -> { where(advertise: true) }
     scope :active, -> do
+      return started_and_unexpired if Spree::Config.consider_actionless_promotion_active == true
+
+      has_actions.started_and_unexpired
+    end
+    scope :started_and_unexpired, -> do
       table = arel_table
       time = Time.current
+
       where(table[:starts_at].eq(nil).or(table[:starts_at].lt(time))).
         where(table[:expires_at].eq(nil).or(table[:expires_at].gt(time)))
+    end
+    scope :has_actions, -> do
+      joins(:promotion_actions)
     end
     scope :applied, -> { joins(:order_promotions).distinct }
 
     self.whitelisted_ransackable_associations = ['codes']
-    self.whitelisted_ransackable_attributes = ['path', 'promotion_category_id']
+    self.whitelisted_ransackable_attributes = %w[name path promotion_category_id]
+    def self.ransackable_scopes(*)
+      %i(active)
+    end
 
     def self.order_activatable?(order)
       order && !UNACTIVATABLE_ORDER_STATES.include?(order.state)
@@ -64,9 +76,24 @@ module Spree
       super
     end
 
+    def not_started?
+      !started?
+    end
+
+    def started?
+      starts_at.nil? || starts_at < Time.current
+    end
+
+    def expired?
+      expires_at.present? && expires_at < Time.current
+    end
+
+    def not_expired?
+      !expired?
+    end
+
     def active?
-      (starts_at.nil? || starts_at < Time.current) &&
-        (expires_at.nil? || expires_at > Time.current)
+      started? && not_expired? && (Spree::Config.consider_actionless_promotion_active || actions.present?)
     end
 
     def inactive?
@@ -111,9 +138,12 @@ module Spree
     # called anytime order.recalculate happens
     def eligible?(promotable, promotion_code: nil)
       return false if inactive?
-      return false if usage_limit_exceeded?
-      return false if promotion_code && promotion_code.usage_limit_exceeded?
       return false if blacklisted?(promotable)
+
+      excluded_orders = eligibility_excluded_orders(promotable)
+      return false if usage_limit_exceeded?(excluded_orders: excluded_orders)
+      return false if promotion_code&.usage_limit_exceeded?(excluded_orders: excluded_orders)
+
       !!eligible_rules(promotable, {})
     end
 
@@ -123,7 +153,8 @@ module Spree
     def eligible_rules(promotable, options = {})
       # Promotions without rules are eligible by default.
       return [] if rules.none?
-      eligible = lambda { |r| r.eligible?(promotable, options) }
+
+      eligible = lambda { |rule| rule.eligible?(promotable, options) }
       specific_rules = rules.for(promotable)
       return [] if specific_rules.none?
 
@@ -145,28 +176,28 @@ module Spree
     end
 
     def products
-      rules.where(type: "Spree::Promotion::Rules::Product").map(&:products).flatten.uniq
+      rules.where(type: "Spree::Promotion::Rules::Product").flat_map(&:products).uniq
     end
 
-    # Whether the promotion has exceeded it's usage restrictions.
+    # Whether the promotion has exceeded its usage restrictions.
     #
+    # @param excluded_orders [Array<Spree::Order>] Orders to exclude from usage limit
     # @return true or false
-    def usage_limit_exceeded?
+    def usage_limit_exceeded?(excluded_orders: [])
       if usage_limit
-        usage_count >= usage_limit
+        usage_count(excluded_orders: excluded_orders) >= usage_limit
       end
     end
 
     # Number of times the code has been used overall
     #
+    # @param excluded_orders [Array<Spree::Order>] Orders to exclude from usage count
     # @return [Integer] usage count
-    def usage_count
-      Spree::Adjustment.eligible.
-        promotion.
-        where(source_id: actions.map(&:id)).
-        joins(:order).
-        merge(Spree::Order.complete).
-        distinct.
+    def usage_count(excluded_orders: [])
+      Spree::Adjustment.promotion.
+        eligible.
+        in_completed_orders(excluded_orders: excluded_orders).
+        where(source_id: actions).
         count(:order_id)
     end
 
@@ -238,10 +269,20 @@ module Spree
       match_policy == "all"
     end
 
-    def apply_automatically_disallowed_with_codes_or_paths
+    def apply_automatically_disallowed_with_paths
       return unless apply_automatically
-      errors.add(:apply_automatically, :disallowed_with_code) if codes.any?
+
       errors.add(:apply_automatically, :disallowed_with_path) if path.present?
+    end
+
+    def eligibility_excluded_orders(promotable)
+      if promotable.is_a?(Spree::Order)
+        [promotable]
+      elsif promotable.respond_to?(:order)
+        [promotable.order]
+      else
+        []
+      end
     end
   end
 end

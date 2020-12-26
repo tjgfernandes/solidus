@@ -55,7 +55,7 @@ module Spree
       end
 
       it "variants returned contain images data" do
-        variant.images.create!(attachment: image("thinking-cat.jpg"))
+        variant.images.create!(attachment: image("blank.jpg"))
 
         get spree.api_variants_path
 
@@ -210,7 +210,7 @@ module Spree
       end
 
       it "can see a single variant with images" do
-        variant.images.create!(attachment: image("thinking-cat.jpg"))
+        variant.images.create!(attachment: image("blank.jpg"))
 
         subject
 
@@ -246,6 +246,18 @@ module Spree
         it "variant properties is an array of variant property values" do
           expected_attrs = [:id, :property_id, :value, :property_name]
           expect(json_response["variant_properties"].first).to have_attributes(expected_attrs)
+        end
+      end
+
+      context "when tracking is disabled" do
+        before do
+          stub_spree_preferences(track_inventory_levels: false)
+          subject
+        end
+
+        it "still displays valid json with total_on_hand Float::INFINITY" do
+          expect(response.status).to eq(200)
+          expect(json_response['total_on_hand']).to eq nil
         end
       end
     end

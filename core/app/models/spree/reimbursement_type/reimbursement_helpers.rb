@@ -34,10 +34,17 @@ module Spree
       refund = reimbursement.refunds.build({
         payment: payment,
         amount: amount,
-        reason: Spree::RefundReason.return_processing_reason
+        reason: Spree::RefundReason.return_processing_reason,
+        perform_after_create: false
       })
 
-      simulate ? refund.readonly! : refund.save!
+      if simulate
+        refund.readonly!
+      else
+        refund.save!
+        refund.perform!
+      end
+
       refund
     end
 
@@ -54,7 +61,7 @@ module Spree
       Spree::Reimbursement::Credit.default_creditable_class.new(
         user: reimbursement.order.user,
         amount: unpaid_amount,
-        category: Spree::StoreCreditCategory.reimbursement_category(reimbursement),
+        category: reimbursement.store_credit_category,
         created_by: created_by,
         memo: "Refund for uncreditable payments on order #{reimbursement.order.number}",
         currency: reimbursement.order.currency
@@ -63,8 +70,8 @@ module Spree
 
     def sorted_eligible_refund_payments(payments)
       if eligible_refund_methods = self.eligible_refund_methods
-        payments = payments.select { |p| eligible_refund_methods.include? p.payment_method.class }
-        payments = payments.sort_by { |p| eligible_refund_methods.index(p.payment_method.class) }
+        payments = payments.select { |payment| eligible_refund_methods.include? payment.payment_method.class }
+        payments = payments.sort_by { |payment| eligible_refund_methods.index(payment.payment_method.class) }
       end
       payments
     end

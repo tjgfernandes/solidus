@@ -30,14 +30,14 @@ describe "viewing products", type: :feature, inaccessible: true do
 
   describe 'meta tags and title' do
     it 'displays metas' do
-      t_shirts.update_attributes metas
+      t_shirts.update metas
       visit '/t/category/super-clothing/t-shirts'
       expect(page).to have_meta(:description, 'Brand new Ruby on Rails TShirts')
       expect(page).to have_meta(:keywords, 'ror, tshirt, ruby')
     end
 
     it 'display title if set' do
-      t_shirts.update_attributes metas
+      t_shirts.update metas
       visit '/t/category/super-clothing/t-shirts'
       expect(page).to have_title("Ruby On Rails TShirt")
     end
@@ -49,7 +49,7 @@ describe "viewing products", type: :feature, inaccessible: true do
 
     # Regression test for https://github.com/spree/spree/issues/2814
     it "doesn't use meta_title as heading on page" do
-      t_shirts.update_attributes metas
+      t_shirts.update metas
       visit '/t/category/super-clothing/t-shirts'
       within("h1.taxon-title") do
         expect(page).to have_content(t_shirts.name)
@@ -57,7 +57,7 @@ describe "viewing products", type: :feature, inaccessible: true do
     end
 
     it 'uses taxon name in title when meta_title set to empty string' do
-      t_shirts.update_attributes meta_title: ''
+      t_shirts.update meta_title: ''
       visit '/t/category/super-clothing/t-shirts'
       expect(page).to have_title('Category - T-Shirts - ' + store_name)
     end
@@ -73,7 +73,7 @@ describe "viewing products", type: :feature, inaccessible: true do
       within(:css, '#taxonomies') { click_link "Ruby on Rails" }
 
       expect(page.all('ul.product-listing li').size).to eq(7)
-      tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+      tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
       tmp.delete("")
       array = ["Ruby on Rails Bag",
                "Ruby on Rails Baseball Jersey",
@@ -89,7 +89,7 @@ describe "viewing products", type: :feature, inaccessible: true do
       within(:css, '#taxonomies') { click_link "Ruby" }
 
       expect(page.all('ul.product-listing li').size).to eq(1)
-      tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+      tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
       tmp.delete("")
       expect(tmp.sort!).to eq(["Ruby Baseball Jersey"])
     end
@@ -98,7 +98,7 @@ describe "viewing products", type: :feature, inaccessible: true do
       within(:css, '#taxonomies') { click_link "Apache" }
 
       expect(page.all('ul.product-listing li').size).to eq(1)
-      tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+      tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
       tmp.delete("")
       expect(tmp.sort!).to eq(["Apache Baseball Jersey"])
     end
@@ -107,7 +107,7 @@ describe "viewing products", type: :feature, inaccessible: true do
       click_link "Clothing"
 
       expect(page.all('ul.product-listing li').size).to eq(5)
-      tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+      tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
       tmp.delete("")
       expect(tmp.sort!).to eq(["Apache Baseball Jersey",
                                "Ruby Baseball Jersey",
@@ -120,7 +120,7 @@ describe "viewing products", type: :feature, inaccessible: true do
       click_link "Mugs"
 
       expect(page.all('ul.product-listing li').size).to eq(2)
-      tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+      tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
       tmp.delete("")
       expect(tmp.sort!).to eq(["Ruby on Rails Mug", "Ruby on Rails Stein"])
     end
@@ -129,7 +129,7 @@ describe "viewing products", type: :feature, inaccessible: true do
       click_link "Bags"
 
       expect(page.all('ul.product-listing li').size).to eq(2)
-      tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+      tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
       tmp.delete("")
       expect(tmp.sort!).to eq(["Ruby on Rails Bag", "Ruby on Rails Tote"])
     end

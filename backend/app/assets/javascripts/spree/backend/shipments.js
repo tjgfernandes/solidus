@@ -1,40 +1,5 @@
 // Shipments AJAX API
-
-var ShipmentAddVariantView = Backbone.View.extend({
-  events: {
-    "change #add_variant_id": "onSelect",
-    "click .add_variant": "onAdd",
-    "submit form": "onAdd"
-  },
-  onSelect: function(e) {
-    var variant_id = this.$("#add_variant_id").val();
-    var template = HandlebarsTemplates["variants/autocomplete_stock"];
-    var $stock_details = this.$('#stock_details');
-    Spree.ajax({
-      url: Spree.routes.variants_api + "/" + variant_id,
-      success: function(variant){
-        $stock_details.html(template({variant: variant})).show()
-      }
-    });
-  },
-  onAdd: function(e){
-    e.preventDefault();
-
-    this.$('#stock_details').hide();
-
-    var variant_id = this.$('input.variant_autocomplete').val();
-    var stock_location_id = $(e.target).data('stock-location-id');
-    var quantity = this.$("input.quantity[data-stock-location-id='" + stock_location_id + "']").val();
-
-    addVariantFromStockLocation(stock_location_id, variant_id, quantity)
-  }
-});
-
-Spree.ready(function(){
-  $(".js-shipment-add-variant").each(function(){
-    new ShipmentAddVariantView({el: this});
-  });
-});
+/* eslint no-extra-semi: "off", no-unused-vars: "off" */
 
 var ShipShipmentView = Backbone.View.extend({
   initialize: function(options){
@@ -46,7 +11,7 @@ var ShipShipmentView = Backbone.View.extend({
   onSubmit: function(e){
     Spree.ajax({
       type: "PUT",
-      url: Spree.routes.shipments_api + "/" + this.shipment_number + "/ship",
+      url: Spree.pathFor('api/shipments/' + this.shipment_number + '/ship'),
       data: {
         send_mailer: this.$("[name='send_mailer']").is(":checked")
       },
@@ -62,7 +27,7 @@ adjustShipmentItems = function(shipment_number, variant_id, quantity){
   var shipment = _.findWhere(shipments, {number: shipment_number});
   var inventory_units = _.where(shipment.inventory_units, {variant_id: variant_id});
 
-  var url = Spree.routes.shipments_api + "/" + shipment_number;
+  var url = Spree.pathFor('api/shipments/' + shipment_number);
 
   var new_quantity = 0;
   if(inventory_units.length<quantity){
@@ -93,32 +58,6 @@ adjustShipmentItems = function(shipment_number, variant_id, quantity){
         window.show_flash('error', message);
       }
     });
-  }
-};
-
-addVariantFromStockLocation = function(stock_location_id, variant_id, quantity) {
-  var shipment = _.find(shipments, function(shipment){
-    return shipment.stock_location_id == stock_location_id && (shipment.state == 'ready' || shipment.state == 'pending');
-  });
-
-  if(shipment==undefined){
-    Spree.ajax({
-      type: "POST",
-      url: Spree.routes.shipments_api,
-      data: {
-        shipment: {
-          order_id: window.order_number
-        },
-        variant_id: variant_id,
-        quantity: quantity,
-        stock_location_id: stock_location_id,
-      }
-    }).done(function(){
-      window.location.reload();
-    });
-  }else{
-    //add to existing shipment
-    adjustShipmentItems(shipment.number, variant_id, quantity);
   }
 };
 
@@ -167,7 +106,7 @@ var ShipmentSplitItemView = Backbone.View.extend({
       split_attr.stock_location_id = target_id;
       jqXHR = Spree.ajax({
         type: "POST",
-        url: Spree.routes.shipments_api + "/transfer_to_location",
+        url: Spree.pathFor('api/shipments/transfer_to_location'),
         data: split_attr
       });
     } else if (target_type == 'shipment') {
@@ -175,7 +114,7 @@ var ShipmentSplitItemView = Backbone.View.extend({
       split_attr.target_shipment_number = target_id;
       jqXHR = Spree.ajax({
         type: "POST",
-        url: Spree.routes.shipments_api + "/transfer_to_shipment",
+        url: Spree.pathFor('api/shipments/transfer_to_shipment'),
         data: split_attr
       });
     } else {
@@ -240,7 +179,7 @@ var ShipmentItemView = Backbone.View.extend({
     var _this = this;
     Spree.ajax({
       type: "GET",
-      url: Spree.routes.variants_api + "/" + this.variant_id,
+      url: Spree.pathFor('api/variants/' + this.variant_id),
     }).success(function(variant){
       var split = new ShipmentSplitItemView({
         shipmentItemView: _this,

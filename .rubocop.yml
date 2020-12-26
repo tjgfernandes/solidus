@@ -1,5 +1,9 @@
 # Relaxed.Ruby.Style
 
+require:
+  - rubocop-performance
+  - rubocop-rails
+
 AllCops:
   Exclude:
     - 'vendor/**/*'
@@ -7,7 +11,8 @@ AllCops:
     - '*/spec/dummy/**/*'
     - 'sandbox/**/*'
     - '**/templates/**/*'
-  TargetRubyVersion: 2.2
+    - 'guides/node_modules/**/*'
+  TargetRubyVersion: 2.4
 
 # Sometimes I believe this reads better
 # This also causes spacing issues on multi-line fixes
@@ -20,6 +25,10 @@ Style/ClassVars:
 
 # We need these names for backwards compatability
 Naming/PredicateName:
+  Enabled: false
+
+# We want to name rescued errors as error not simply e.
+Naming/RescuedExceptionsVariableName:
   Enabled: false
 
 Naming/AccessorMethodName:
@@ -85,10 +94,10 @@ Layout/ClosingParenthesisIndentation:
 Layout/MultilineMethodCallIndentation:
   Enabled: false
 
-Layout/IndentArray:
+Layout/IndentFirstArrayElement:
   Enabled: false
 
-Layout/IndentHash:
+Layout/IndentFirstHashElement:
   Enabled: false
 
 Layout/AlignHash:
@@ -111,6 +120,11 @@ Rails/DynamicFindBy:
   Whitelist:
     - find_by_param
     - find_by_param!
+
+# It's okay to skip model validations to setup a spec.
+Rails/SkipsModelValidations:
+  Exclude:
+    - '*/spec/**/*'
 
 # We use a lot of
 #

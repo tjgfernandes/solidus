@@ -7,13 +7,15 @@ module Spree
     RSpec.describe InventoryUnitsFinalizer, type: :model do
       context "when finalizing an order with one line_item" do
         let(:order)          { build(:order_with_line_items) }
-        let(:inventory_unit) { build(:inventory_unit, order: order, variant: order.line_items.first.variant, shipment: order.shipments.first) }
-        let(:stock_item) { inventory_unit.variant.stock_items.first }
+        let(:inventory_unit) { build(:inventory_unit, order: order, variant: variant, line_item: line_item, shipment: order.shipments.first) }
+        let(:stock_item)     { inventory_unit.variant.stock_items.first }
+        let(:line_item)      { order.line_items.first }
+        let(:variant)        { create(:variant) }
 
         before do
           stock_item.set_count_on_hand(10)
-          stock_item.update_attributes!(backorderable: false)
-          inventory_unit.update_attributes!(pending: true)
+          stock_item.update!(backorderable: false)
+          inventory_unit.update!(pending: true)
         end
 
         subject { described_class.new([inventory_unit]).run! }
@@ -27,7 +29,11 @@ module Spree
           expect { subject }.to change { inventory_unit.reload.pending }.to(false)
         end
 
-        it "unstocks the variant" do
+        it "doesn't unstocks the line item variant" do
+          expect { subject }.to_not change { line_item.variant.stock_items.first.reload.count_on_hand }
+        end
+
+        it "unstocks the inventory_unit variant" do
           expect { subject }.to change { stock_item.reload.count_on_hand }.from(10).to(9)
         end
       end
@@ -42,8 +48,8 @@ module Spree
         before do
           stock_item.set_count_on_hand(10)
           stock_item_2.set_count_on_hand(10)
-          inventory_unit.update_attributes!(pending: true)
-          inventory_unit_2.update_attributes!(pending: true)
+          inventory_unit.update!(pending: true)
+          inventory_unit_2.update!(pending: true)
         end
 
         subject { described_class.new([inventory_unit, inventory_unit_2]).run! }

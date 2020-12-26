@@ -40,7 +40,7 @@ module Spree
         adjustment -= @stock_item.count_on_hand if params[:stock_item][:force]
 
         Spree::StockItem.transaction do
-          if @stock_item.update_attributes(stock_item_params)
+          if @stock_item.update(stock_item_params)
             adjust_stock_item_count_on_hand(adjustment)
             respond_with(@stock_item, status: 200, default_template: :show)
           else
@@ -58,12 +58,12 @@ module Spree
       private
 
       def load_stock_location
-        @stock_location ||= Spree::StockLocation.accessible_by(current_ability).find(params.fetch(:stock_location_id))
+        @stock_location ||= Spree::StockLocation.accessible_by(current_ability, :show).find(params.fetch(:stock_location_id))
       end
 
       def scope
         includes = { variant: [{ option_values: :option_type }, :product] }
-        @stock_location.stock_items.accessible_by(current_ability, :read).includes(includes)
+        @stock_location.stock_items.accessible_by(current_ability).includes(includes)
       end
 
       def stock_item_params

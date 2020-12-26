@@ -7,21 +7,16 @@ require 'rails'
 require 'active_record/railtie'
 require 'action_controller/railtie'
 require 'action_mailer/railtie'
+require 'active_storage/engine'
 
 Rails.env = 'test'
 
 require 'solidus_core'
 
-# @private
-def forgery_protected_by_default?
-  Gem::Version.new(Rails.version) >= Gem::Version.new('5.2')
-end
+RAILS_6_OR_ABOVE = Rails.gem_version >= Gem::Version.new('6.0')
 
 # @private
 class ApplicationController < ActionController::Base
-  if !forgery_protected_by_default?
-    protect_from_forgery with: :exception
-  end
 end
 
 # @private
@@ -50,28 +45,37 @@ module DummyApp
   end
 
   class Application < ::Rails::Application
-    config.eager_load                                 = false
-    config.cache_classes                              = true
-    config.cache_store                                = :memory_store
-    config.serve_static_assets                        = true
-    config.public_file_server.headers                 = { 'Cache-Control' => 'public, max-age=3600' }
-    config.whiny_nils                                 = true
-    config.consider_all_requests_local                = true
+    config.eager_load = false
+    config.cache_classes = true
+    config.cache_store = :memory_store
+    config.serve_static_assets = true
+    config.public_file_server.headers = { 'Cache-Control' => 'public, max-age=3600' }
+    config.whiny_nils = true
+    config.consider_all_requests_local = true
     config.action_controller.allow_forgery_protection = true
-    config.action_controller.perform_caching          = false
-    config.action_dispatch.show_exceptions            = false
-    config.active_support.deprecation                 = :stderr
-    config.action_mailer.delivery_method              = :test
-    config.active_support.deprecation                 = :stderr
-    config.secret_key_base                            = 'SECRET_TOKEN'
+    config.action_controller.default_protect_from_forgery = true
+    config.action_controller.perform_caching = false
+    config.action_dispatch.show_exceptions = false
+    config.active_support.deprecation = :stderr
+    config.action_mailer.delivery_method = :test
+    config.active_support.deprecation = :stderr
+    config.secret_key_base = 'SECRET_TOKEN'
 
-    if forgery_protected_by_default?
-      config.action_controller.default_protect_from_forgery = true
-    end
+    config.action_mailer.delivery_job = "ActionMailer::MailDeliveryJob" if RAILS_6_OR_ABOVE
+    config.active_record.sqlite3.represent_boolean_as_integer = true unless RAILS_6_OR_ABOVE
 
-    if config.active_record.sqlite3
-      # Rails >= 5.2
-      config.active_record.sqlite3.represent_boolean_as_integer = true
+    config.storage_path = Rails.root.join('tmp', 'storage')
+
+    if ENV['ENABLE_ACTIVE_STORAGE']
+      initializer 'solidus.active_storage' do
+        config.active_storage.service_configurations = {
+          test: {
+            service: 'Disk',
+            root: config.storage_path
+          }
+        }
+        config.active_storage.service = :test
+      end
     end
 
     # Avoid issues if an old spec/dummy still exists
@@ -112,6 +116,19 @@ end
 Spree.user_class = 'Spree::LegacyUser'
 Spree.config do |config|
   config.mails_from = "store@example.com"
+  config.raise_with_invalid_currency = false
+  config.redirect_back_on_unauthorized = true
+  config.run_order_validations_on_order_updater = true
+  config.use_combined_first_and_last_name_in_address = true
+  config.use_legacy_order_state_machine = false
+  config.use_custom_cancancan_actions = false
+  config.consider_actionless_promotion_active = false
+  config.use_legacy_store_credit_reimbursement_category_name = false
+
+  if ENV['ENABLE_ACTIVE_STORAGE']
+    config.image_attachment_module = 'Spree::Image::ActiveStorageAttachment'
+    config.taxon_attachment_module = 'Spree::Taxon::ActiveStorageAttachment'
+  end
 end
 
 # Raise on deprecation warnings

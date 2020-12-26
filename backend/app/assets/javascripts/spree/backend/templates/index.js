@@ -1,4 +1,6 @@
 //= require spree/backend/templates/_image
+//= require spree/backend/templates/tables/selectable_label
+//= require spree/backend/templates/tables/return_item_sum_amount
 //= require spree/backend/templates/orders/customer_details/autocomplete
 //= require spree/backend/templates/orders/details_adjustment_row
 //= require spree/backend/templates/orders/line_item
@@ -13,6 +15,5 @@
 //= require spree/backend/templates/taxons/_tree
 //= require spree/backend/templates/taxons/tree
 //= require spree/backend/templates/variants/autocomplete
-//= require spree/backend/templates/variants/autocomplete_stock
 //= require spree/backend/templates/variants/line_items_autocomplete_stock
 //= require spree/backend/templates/variants/split

@@ -12,7 +12,7 @@ module Spree
 
       before do
         # So that Payment#purchase! is called during processing
-        Spree::Config[:auto_capture] = true
+        stub_spree_preferences(auto_capture: true)
       end
 
       let(:payment_method) { create(:credit_card_payment_method) }
@@ -111,13 +111,13 @@ module Spree
       end
 
       it "keeps source attributes on assignment" do
-        OrderUpdateAttributes.new(order, payments_attributes: [payment_attributes]).apply
+        OrderUpdateAttributes.new(order, { payments_attributes: [payment_attributes] }).apply
         expect(order.unprocessed_payments.last.source.number).to be_present
       end
 
       # For the reason of this test, please see spree/spree_gateway#132
       it "keeps source attributes through OrderUpdateAttributes" do
-        OrderUpdateAttributes.new(order, payments_attributes: [payment_attributes]).apply
+        OrderUpdateAttributes.new(order, { payments_attributes: [payment_attributes] }).apply
         expect(order.unprocessed_payments.last.source.number).to be_present
       end
     end
@@ -147,12 +147,12 @@ module Spree
         before { expect(payment).to receive(:process!).and_raise(Spree::Core::GatewayError) }
 
         it "should return true when configured to allow checkout on gateway failures" do
-          Spree::Config.set allow_checkout_on_gateway_error: true
+          stub_spree_preferences(allow_checkout_on_gateway_error: true)
           expect(order.process_payments!).to be true
         end
 
         it "should return false when not configured to allow checkout on gateway failures" do
-          Spree::Config.set allow_checkout_on_gateway_error: false
+          stub_spree_preferences(allow_checkout_on_gateway_error: false)
           expect(order.process_payments!).to be false
         end
       end
@@ -213,7 +213,7 @@ module Spree
         end
 
         context "for canceled orders" do
-          before { order.update_attributes(state: 'canceled') }
+          before { order.update(state: 'canceled') }
 
           it "it should be zero" do
             expect(order.total).to eq(110)

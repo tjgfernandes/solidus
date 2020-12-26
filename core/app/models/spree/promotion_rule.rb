@@ -3,9 +3,9 @@
 module Spree
   # Base class for all promotion rules
   class PromotionRule < Spree::Base
-    belongs_to :promotion, class_name: 'Spree::Promotion', inverse_of: :promotion_rules
+    belongs_to :promotion, class_name: 'Spree::Promotion', inverse_of: :promotion_rules, optional: true
 
-    scope :of_type, ->(t) { where(type: t) }
+    scope :of_type, ->(type) { where(type: type) }
 
     validates :promotion, presence: true
     validate :unique_per_promotion, on: :create
@@ -45,7 +45,7 @@ module Spree
     end
 
     def eligibility_error_message(key, options = {})
-      I18n.t(key, { scope: [:spree, :eligibility_errors, :messages] }.merge(options))
+      I18n.t(key, **{ scope: [:spree, :eligibility_errors, :messages] }.merge(options))
     end
   end
 end

@@ -1,22 +1,16 @@
 # frozen_string_literal: true
 
-require 'discard'
-
 module Spree
   # Base class for all types of promotion action.
   #
   # PromotionActions perform the necessary tasks when a promotion is activated
   # by an event and determined to be eligible.
   class PromotionAction < Spree::Base
-    acts_as_paranoid
-    include Spree::ParanoiaDeprecations
+    include Spree::SoftDeletable
 
-    include Discard::Model
-    self.discard_column = :deleted_at
+    belongs_to :promotion, class_name: 'Spree::Promotion', inverse_of: :promotion_actions, optional: true
 
-    belongs_to :promotion, class_name: 'Spree::Promotion', inverse_of: :promotion_actions
-
-    scope :of_type, ->(t) { where(type: Array.wrap(t).map(&:to_s)) }
+    scope :of_type, ->(type) { where(type: Array.wrap(type).map(&:to_s)) }
     scope :shipping, -> { of_type(Spree::Config.environment.promotions.shipping_actions.to_a) }
 
     # Updates the state of the order or performs some other action depending on

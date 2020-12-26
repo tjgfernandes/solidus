@@ -10,6 +10,7 @@ module Spree
       protect_from_forgery unless: -> { request.format.json? }
 
       include CanCan::ControllerAdditions
+      include Spree::Core::ControllerHelpers::CurrentHost
       include Spree::Core::ControllerHelpers::Store
       include Spree::Core::ControllerHelpers::Pricing
       include Spree::Core::ControllerHelpers::StrongParameters
@@ -28,6 +29,7 @@ module Spree
       rescue_from ActiveRecord::RecordNotFound, with: :not_found
       rescue_from CanCan::AccessDenied, with: :unauthorized
       rescue_from Spree::Core::GatewayError, with: :gateway_error
+      rescue_from StateMachines::InvalidTransition, with: :invalid_transition
 
       helper Spree::Api::ApiHelpers
 
@@ -49,9 +51,9 @@ module Spree
       def authenticate_user
         unless @current_api_user
           if requires_authentication? && api_key.blank? && order_token.blank?
-            render "spree/api/errors/must_specify_api_key", status: 401
+            render "spree/api/errors/must_specify_api_key", status: :unauthorized
           elsif order_token.blank? && (requires_authentication? || api_key.present?)
-            render "spree/api/errors/invalid_api_key", status: 401
+            render "spree/api/errors/invalid_api_key", status: :unauthorized
           end
         end
       end
@@ -65,7 +67,7 @@ module Spree
       end
 
       def unauthorized
-        render "spree/api/errors/unauthorized", status: 401
+        render "spree/api/errors/unauthorized", status: :unauthorized
       end
 
       def gateway_error(exception)
@@ -78,7 +80,7 @@ module Spree
           exception: exception.message,
           error: exception.message,
           missing_param: exception.param
-        }, status: 422
+        }, status: :unprocessable_entity
       end
 
       def requires_authentication?
@@ -86,7 +88,7 @@ module Spree
       end
 
       def not_found
-        render "spree/api/errors/not_found", status: 404
+        render "spree/api/errors/not_found", status: :not_found
       end
 
       def current_ability
@@ -96,7 +98,7 @@ module Spree
       def invalid_resource!(resource)
         Rails.logger.error "invalid_resouce_errors=#{resource.errors.full_messages}"
         @resource = resource
-        render "spree/api/errors/invalid_resource", status: 422
+        render "spree/api/errors/invalid_resource", status: :unprocessable_entity
       end
 
       def api_key
@@ -112,7 +114,7 @@ module Spree
 
       def spree_token
         token = request.headers["X-Spree-Token"]
-        return unless token.present?
+        return if token.blank?
 
         Spree::Deprecation.warn(
           'The custom X-Spree-Token request header is deprecated and will be removed in the next release.' \
@@ -133,13 +135,13 @@ module Spree
 
       def product_scope
         if can?(:admin, Spree::Product)
-          scope = Spree::Product.with_deleted.accessible_by(current_ability, :read).includes(*product_includes)
+          scope = Spree::Product.with_discarded.accessible_by(current_ability).includes(*product_includes)
 
           unless params[:show_deleted]
             scope = scope.not_deleted
           end
         else
-          scope = Spree::Product.accessible_by(current_ability, :read).available.includes(*product_includes)
+          scope = Spree::Product.accessible_by(current_ability).available.includes(*product_includes)
         end
 
         scope
@@ -159,13 +161,13 @@ module Spree
 
       def authorize_for_order
         @order = Spree::Order.find_by(number: order_id)
-        authorize! :read, @order, order_token
+        authorize! :show, @order, order_token
       end
 
       def lock_order
         OrderMutex.with_lock!(@order) { yield }
-      rescue Spree::OrderMutex::LockFailed => e
-        render plain: e.message, status: 409
+      rescue Spree::OrderMutex::LockFailed => error
+        render plain: error.message, status: :conflict
       end
 
       def insufficient_stock_error(exception)
@@ -175,7 +177,7 @@ module Spree
             errors: [I18n.t(:quantity_is_not_available, scope: "spree.api.order")],
             type: 'insufficient_stock'
           },
-          status: 422
+          status: :unprocessable_entity
         )
       end
 
@@ -187,6 +189,12 @@ module Spree
 
       def default_per_page
         Kaminari.config.default_per_page
+      end
+
+      def invalid_transition(error)
+        logger.error("invalid_transition #{error.event} from #{error.from} for #{error.object.class.name}. Error: #{error.inspect}")
+
+        render "spree/api/errors/could_not_transition", locals: { resource: error.object }, status: :unprocessable_entity
       end
     end
   end

@@ -9,7 +9,7 @@ module Spree
     let!(:store) { create(:store, default: true) }
     let(:order_1) { Spree::Order.create }
     let(:order_2) { Spree::Order.create }
-    let(:user) { stub_model(Spree::LegacyUser, email: "spree@example.com") }
+    let(:user) { stub_model(Spree::LegacyUser, email: "solidus@example.com") }
     let(:subject) { Spree::OrderMerger.new(order_1) }
 
     it "destroys the other order" do
@@ -77,13 +77,13 @@ module Spree
 
       context "2 equal line items" do
         before do
-          @line_item_1 = order_1.contents.add(variant, 1, foos: {})
-          @line_item_2 = order_2.contents.add(variant, 1, foos: {})
+          @line_item_one = order_1.contents.add(variant, 1, foos: {})
+          @line_item_two = order_2.contents.add(variant, 1, foos: {})
         end
 
         specify do
           without_partial_double_verification do
-            expect(order_1).to receive(:foos_match).with(@line_item_1, kind_of(Hash)).and_return(true)
+            expect(order_1).to receive(:foos_match).with(@line_item_one, kind_of(Hash)).and_return(true)
           end
           subject.merge!(order_2)
           expect(order_1.line_items.count).to eq(1)
@@ -135,7 +135,7 @@ module Spree
         expect(order_1.line_items.count).to eq(2)
 
         expect(order_1.item_count).to eq 2
-        expect(order_1.item_total).to eq order_1.line_items.map(&:amount).sum
+        expect(order_1.item_total).to eq order_1.line_items.sum(&:amount)
 
         # No guarantee on ordering of line items, so we do this:
         expect(order_1.line_items.pluck(:quantity)).to match_array([1, 1])
@@ -144,16 +144,13 @@ module Spree
     end
 
     context "merging together orders with invalid line items" do
-      let(:variant_2) { create(:variant) }
-
       before do
-        order_1.contents.add(variant, 1)
-        order_2.contents.add(variant_2, 1)
+        order_1.contents.add(create(:variant), 1)
+        order_2.contents.add(create(:variant), 1)
       end
 
       it "should create errors with invalid line items" do
-        variant_2.really_destroy!
-        order_2.line_items.to_a.first.reload # so that it registers as invalid
+        allow(order_2.line_items.first).to receive(:variant) { nil }
         subject.merge!(order_2)
         expect(order_1.errors.full_messages).not_to be_empty
       end

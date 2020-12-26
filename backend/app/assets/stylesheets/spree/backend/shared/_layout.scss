@@ -8,16 +8,12 @@ body {
   padding-left: $width-sidebar;
 }
 
-.admin-nav {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: $width-sidebar;
-  @media print { display: none }
+.admin {
+  background-color: $admin-body-bg;
 }
 
 .content-wrapper {
+  background-color: $content-wrapper-bg;
   padding-top: 1rem;
   padding-left: $grid-gutter-width;
   padding-right: $grid-gutter-width;

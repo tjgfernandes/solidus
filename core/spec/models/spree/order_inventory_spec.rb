@@ -16,7 +16,7 @@ RSpec.describe Spree::OrderInventory, type: :model do
     let(:new_quantity) { 3 }
 
     before do
-      line_item.update_attributes!(quantity: old_quantity)
+      line_item.update!(quantity: old_quantity)
 
       line_item.update_column(:quantity, new_quantity)
       subject.line_item.reload
@@ -72,7 +72,7 @@ RSpec.describe Spree::OrderInventory, type: :model do
     context "store doesnt track inventory" do
       let(:new_quantity) { 1 }
 
-      before { Spree::Config.track_inventory_levels = false }
+      before { stub_spree_preferences(track_inventory_levels: false) }
 
       it "creates on hand inventory units" do
         variant.stock_items.each(&:really_destroy!)
@@ -86,7 +86,7 @@ RSpec.describe Spree::OrderInventory, type: :model do
     end
 
     context "variant doesnt track inventory" do
-      before { variant.update_attributes!(track_inventory: false) }
+      before { variant.update!(track_inventory: false) }
       let(:new_quantity) { 1 }
 
       it "creates on hand inventory units" do
@@ -136,25 +136,51 @@ RSpec.describe Spree::OrderInventory, type: :model do
     end
 
     it 'should select first non-shipped shipment that already contains given variant' do
-      shipment = subject.send(:determine_target_shipment)
+      shipment = subject.send(:determine_target_shipment, 1)
       expect(shipment.shipped?).to be false
       expect(shipment.inventory_units_for(variant)).not_to be_empty
 
       expect(variant.stock_location_ids.include?(shipment.stock_location_id)).to be true
     end
 
-    context "when no shipments already contain this varint" do
+    context "when no shipments already contain this variant" do
       before do
         subject.line_item.reload
         subject.inventory_units.destroy_all
       end
 
-      it 'selects first non-shipped shipment that leaves from same stock_location' do
-        shipment = subject.send(:determine_target_shipment)
-        shipment.reload
-        expect(shipment.shipped?).to be false
-        expect(shipment.inventory_units_for(variant)).to be_empty
-        expect(variant.stock_location_ids.include?(shipment.stock_location_id)).to be true
+      context 'when availability should be considered' do
+        let(:stock_item) { variant.stock_items.last }
+
+        before do
+          variant.stock_items.update_all backorderable: false
+          variant.stock_items.reload
+        end
+
+        context 'when there is enough availability at one stock location' do
+          before { stock_item.set_count_on_hand 1 }
+
+          it 'favors first non-shipped shipment from same stock location that have enough availability' do
+            shipment = subject.send(:determine_target_shipment, 1)
+            shipment.reload
+
+            expect(shipment.shipped?).to be false
+            expect(shipment.inventory_units_for(variant)).to be_empty
+            expect(shipment.stock_location).to eql stock_item.stock_location
+          end
+        end
+
+        context 'when there is not enough availability at any stock location' do
+          it 'falls-back selecting first non-shipped shipment that leaves from same stock_location' do
+            shipment = subject.send(:determine_target_shipment, 1)
+            shipment.reload
+
+            expect(shipment.shipped?).to be false
+            expect(shipment.inventory_units_for(variant)).to be_empty
+            expect(variant.stock_location_ids.include?(shipment.stock_location_id)).to be true
+            expect(shipment.stock_location).not_to eql stock_item.stock_location
+          end
+        end
       end
     end
   end
@@ -164,7 +190,7 @@ RSpec.describe Spree::OrderInventory, type: :model do
     let(:new_quantity) { 2 }
 
     before do
-      line_item.update_attributes!(quantity: old_quantity)
+      line_item.update!(quantity: old_quantity)
 
       line_item.update_column(:quantity, new_quantity)
       subject.line_item.reload
@@ -280,6 +306,25 @@ RSpec.describe Spree::OrderInventory, type: :model do
 
         expect(different_inventory.reload).to be_persisted
       end
+    end
+  end
+
+  context 'when the order has no suitable shipment for the variant' do
+    let(:new_line_item) { create :line_item, order: order }
+
+    before do
+      new_line_item.inventory_units.destroy_all
+      new_line_item.variant.stock_items.discard_all
+      create :stock_location
+      order.line_items.reload
+    end
+
+    subject { described_class.new(order, new_line_item) }
+
+    it 'creates a new shipment' do
+      expect do
+        subject.verify
+      end.to change { order.shipments.count }.from(1).to 2
     end
   end
 end

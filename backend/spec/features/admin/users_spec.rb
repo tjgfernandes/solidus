@@ -9,6 +9,7 @@ describe 'Users', type: :feature do
   let!(:user_b) { create(:user_with_addresses, email: 'b@example.com') }
   let!(:admin_role) { create(:role, name: 'admin') }
   let!(:user_role) { create(:role, name: 'user') }
+  let!(:store) { create(:store) }
 
   let(:order) { create(:completed_order_with_totals, user: user_a, number: "R123") }
 
@@ -21,6 +22,21 @@ describe 'Users', type: :feature do
   end
 
   let(:orders) { [order, order_2] }
+
+  describe 'the user items page' do
+    context 'when the user cannot manage orders' do
+      custom_authorization! do |_user|
+        cannot :manage, Spree::Order
+        can [:read, :admin], Spree::Order
+      end
+
+      before { visit spree.items_admin_user_path(user_a) }
+
+      it 'does not show the link for creating new orders' do
+        expect(page).not_to have_content 'No Orders found. Create One.'
+      end
+    end
+  end
 
   shared_examples_for 'a user page' do
     it 'has lifetime stats' do
@@ -158,14 +174,6 @@ describe 'Users', type: :feature do
       expect(page).to have_field('user_email', with: 'a@example.com99')
     end
 
-    it 'can edit the user password' do
-      fill_in 'user_password', with: 'welcome'
-      fill_in 'user_password_confirmation', with: 'welcome'
-      click_button 'Update'
-
-      expect(page).to have_text 'Account updated'
-    end
-
     it 'can edit user roles' do
       click_link 'Account'
 
@@ -211,6 +219,24 @@ describe 'Users', type: :feature do
       end
 
       expect(user_a.reload.bill_address.address1).to eq "1313 Mockingbird Ln"
+    end
+
+    it 'can edit the user password' do
+      fill_in 'user_password', with: 'welcome'
+      fill_in 'user_password_confirmation', with: 'welcome'
+      click_button 'Update'
+
+      expect(page).to have_text 'Account updated'
+    end
+
+    context 'without password permissions' do
+      custom_authorization! do |_user|
+        cannot [:update_password], Spree.user_class
+      end
+
+      it 'cannot edit the user password' do
+        expect(page).to_not have_text 'Password'
+      end
     end
 
     context 'invalid entry' do
@@ -396,6 +422,38 @@ describe 'Users', type: :feature do
           expect(page).to have_selector(".item-quantity", text: item.quantity)
           expect(page).to have_selector(".item-total", text: item.money.to_html(html_wrap: false))
         end
+      end
+    end
+  end
+
+  context 'create new order' do
+    before do
+      allow(Spree.user_class).to receive(:find_by).with(id: user_a.id.to_s) { user_a }
+      click_link user_a.email
+      click_link 'Create order for this user'
+    end
+
+    it 'prefills the customer addresses with the user addresses' do
+      click_link 'Customer'
+
+      within '.js-billing-address' do
+        expect(page).to have_field('Street Address', with: user_a.bill_address.address1)
+        expect(page).to have_field("Street Address (cont'd)", with: user_a.bill_address.address2)
+        expect(page).to have_field('City', with: user_a.bill_address.city)
+        expect(page).to have_field('Zip Code', with: user_a.bill_address.zipcode)
+        expect(page).to have_select('Country', selected: "#{user_a.bill_address.country} of America")
+        expect(page).to have_select('State', selected: user_a.bill_address.state.name)
+        expect(page).to have_field('Phone', with: user_a.bill_address.phone)
+      end
+
+      within '.js-shipping-address' do
+        expect(page).to have_field('Street Address', with: user_a.ship_address.address1)
+        expect(page).to have_field("Street Address (cont'd)", with: user_a.ship_address.address2)
+        expect(page).to have_field('City', with: user_a.ship_address.city)
+        expect(page).to have_field('Zip Code', with: user_a.ship_address.zipcode)
+        expect(page).to have_select('Country', selected: "#{user_a.ship_address.country} of America")
+        expect(page).to have_select('State', selected: user_a.ship_address.state.name)
+        expect(page).to have_field('Phone', with: user_a.ship_address.phone)
       end
     end
   end

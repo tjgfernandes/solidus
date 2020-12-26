@@ -10,11 +10,9 @@ module Spree
       around_action :lock_order, only: [:update, :advance, :complete, :confirm, :cancel, :resume, :approve, :resend]
 
       rescue_from Spree::Order::InsufficientStock, with: :insufficient_stock_error
-
       respond_to :html
 
       def index
-        query_present = params[:q]
         params[:q] ||= {}
         params[:q][:completed_at_not_null] ||= '1' if Spree::Config[:show_only_complete_orders_by_default]
         @show_only_completed = params[:q][:completed_at_not_null] == '1'
@@ -62,7 +60,11 @@ module Spree
 
       def new
         user = Spree.user_class.find_by(id: params[:user_id]) if params[:user_id]
-        @order = Spree::Core::Importer::Order.import(user, order_params)
+        order_importer_params = order_params
+        order_importer_params[:bill_address] = user&.bill_address
+        order_importer_params[:ship_address] = user&.ship_address
+
+        @order = Spree::Core::Importer::Order.import(user, order_importer_params)
         redirect_to cart_admin_order_url(@order)
       end
 
@@ -106,8 +108,8 @@ module Spree
         @order.complete!
         flash[:success] = t('spree.order_completed')
         redirect_to edit_admin_order_url(@order)
-      rescue StateMachines::InvalidTransition => e
-        flash[:error] = e.message
+      rescue StateMachines::InvalidTransition => error
+        flash[:error] = error.message
         redirect_to confirm_admin_order_url(@order)
       end
 
@@ -165,6 +167,8 @@ module Spree
       def load_order
         @order = Spree::Order.includes(:adjustments).find_by!(number: params[:id])
         authorize! action, @order
+      rescue ActiveRecord::RecordNotFound
+        resource_not_found(flash_class: Spree::Order, redirect_url: admin_orders_path)
       end
 
       # Used for extensions which need to provide their own custom event links on the order details view.

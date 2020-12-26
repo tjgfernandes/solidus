@@ -1,4 +1,5 @@
 /* global Tabs */
+/* eslint no-redeclare: "off" */
 
 Tabs = (function() {
   function Tabs(el) {
@@ -21,7 +22,7 @@ Tabs = (function() {
     });
     this.totalTabsWidth = this.tabWidths.reduce(function(previousValue, currentValue) {
       return previousValue + currentValue;
-    });
+    }, 0);
 
     window.addEventListener("resize", this.overflowTabs);
     this.overflowTabs();

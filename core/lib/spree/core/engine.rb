@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'spree/config'
-require 'spree/event/processors/mailer_processor'
 
 module Spree
   module Core
@@ -12,8 +11,8 @@ module Spree
       isolate_namespace Spree
       engine_name 'spree'
 
-      config.generators do |g|
-        g.test_framework :rspec
+      config.generators do |generator|
+        generator.test_framework :rspec
       end
 
       initializer "spree.environment", before: :load_config_initializers do |app|
@@ -45,8 +44,42 @@ module Spree
         Migrations.new(config, engine_name).check
       end
 
-      initializer 'spree.core.subscribe_event_mailer_processor' do
-        Spree::Event::Processors::MailerProcessor.subscribe!
+      # Setup Event Subscribers
+      initializer 'spree.core.initialize_subscribers' do |app|
+        app.reloader.to_prepare do
+          Spree::Event.activate_autoloadable_subscribers
+        end
+
+        app.reloader.before_class_unload do
+          Spree::Event.deactivate_all_subscribers
+        end
+      end
+
+      config.after_initialize do
+        if Spree::Config.raise_with_invalid_currency == true
+          Spree::Deprecation.warn(
+            'Spree::Config.raise_with_invalid_currency set to true is ' \
+            'deprecated. Please note that by switching this value, ' \
+            'Spree::LineItem::CurrencyMismatch will not be raised anymore.',
+            caller
+          )
+        end
+        if Spree::Config.consider_actionless_promotion_active == true
+          Spree::Deprecation.warn(
+            'Spree::Config.consider_actionless_promotion_active set to true is ' \
+            'deprecated. Please note that by switching this value, ' \
+            'promotions with no actions will be considered active.',
+            caller
+          )
+        end
+        if Spree::Config.run_order_validations_on_order_updater != true
+          Spree::Deprecation.warn(
+            'Spree::Config.run_order_validations_on_order_updater set to false is ' \
+            'deprecated and will not be possibile in Solidus 3.0. Please switch this ' \
+            'value to true and check that everything works as expected.',
+            caller
+          )
+        end
       end
 
       # Load in mailer previews for apps to use in development.

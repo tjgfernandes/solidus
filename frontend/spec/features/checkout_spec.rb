@@ -89,7 +89,7 @@ describe "Checkout", type: :feature, inaccessible: true do
 
       let!(:order) do
         order = Spree::Order.create!(
-          email: "spree@example.com",
+          email: "solidus@example.com",
           store: Spree::Store.first || FactoryBot.create(:store)
         )
 
@@ -113,16 +113,16 @@ describe "Checkout", type: :feature, inaccessible: true do
       end
 
       context "when user has default addresses saved" do
-        let(:saved_bill_address) { create(:address, firstname: 'Bill') }
-        let(:saved_ship_address) { create(:address, firstname: 'Steve') }
+        let(:saved_bill_address) { create(:address, name: 'Bill Doe') }
+        let(:saved_ship_address) { create(:address, name: 'Steve Smith') }
 
         it "shows the saved addresses" do
           within("#billing") do
-            expect(find_field('First Name').value).to eq 'Bill'
+            expect(find_field('Name').value).to eq 'Bill Doe'
           end
 
           within("#shipping") do
-            expect(find_field('First Name').value).to eq 'Steve'
+            expect(find_field('Name').value).to eq 'Steve Smith'
           end
         end
       end
@@ -133,11 +133,11 @@ describe "Checkout", type: :feature, inaccessible: true do
 
         it 'shows an empty address' do
           within("#billing") do
-            expect(find_field('First Name').value).to be_nil
+            expect(find_field('Name').value).to be_blank
           end
 
           within("#shipping") do
-            expect(find_field('First Name').value).to be_nil
+            expect(find_field('Name').value).to be_blank
           end
         end
       end
@@ -150,11 +150,11 @@ describe "Checkout", type: :feature, inaccessible: true do
           click_button "Checkout"
 
           within("#billing") do
-            expect(find_field('First Name').value).to be_nil
+            expect(find_field('Name').value).to be_blank
           end
 
           within("#shipping") do
-            expect(find_field('First Name').value).to be_nil
+            expect(find_field('Name').value).to be_blank
           end
         end
       end
@@ -183,27 +183,27 @@ describe "Checkout", type: :feature, inaccessible: true do
 
           it 'shows empty addresses' do
             within("#billing") do
-              expect(find_field('First Name').value).to be_nil
+              expect(find_field('Name').value).to be_blank
             end
 
             within("#shipping") do
-              expect(find_field('First Name').value).to be_nil
+              expect(find_field('Name').value).to be_blank
             end
           end
         end
 
         # Regression test for https://github.com/solidusio/solidus/issues/1811
         context "when does have saved addresses" do
-          let(:saved_bill_address) { create(:address, firstname: 'Bill') }
-          let(:saved_ship_address) { create(:address, firstname: 'Steve') }
+          let(:saved_bill_address) { create(:address, name: 'Bill Doe') }
+          let(:saved_ship_address) { create(:address, name: 'Steve Smith') }
 
           it 'shows empty addresses' do
             within("#billing") do
-              expect(find_field('First Name').value).to eq 'Bill'
+              expect(find_field('Name').value).to eq 'Bill Doe'
             end
 
             within("#shipping") do
-              expect(find_field('First Name').value).to eq 'Steve'
+              expect(find_field('Name').value).to eq 'Steve Smith'
             end
           end
         end
@@ -374,6 +374,14 @@ describe "Checkout", type: :feature, inaccessible: true do
       expect(page).to have_current_path(spree.order_path(Spree::Order.last))
       expect(page).to have_content('Ending in 1111')
     end
+
+    it "allows user to save a billing address associated to the credit card" do
+      choose "use_existing_card_no"
+      fill_in_credit_card
+
+      click_on "Save and Continue"
+      expect(Spree::CreditCard.last.address).to be_present
+    end
   end
 
   # regression for https://github.com/spree/spree/issues/2921
@@ -396,7 +404,7 @@ describe "Checkout", type: :feature, inaccessible: true do
 
       click_on "Checkout"
       # edit an address field
-      fill_in "order_bill_address_attributes_firstname", with: "Ryann"
+      fill_in "order_bill_address_attributes_name", with: "Ryann Bigg"
       click_on "Save and Continue"
       click_on "Save and Continue"
       click_on "Save and Continue"
@@ -520,7 +528,7 @@ describe "Checkout", type: :feature, inaccessible: true do
         end
       end
 
-      allow_any_instance_of(Spree::Order).to receive_messages email: "spree@commerce.com"
+      allow_any_instance_of(Spree::Order).to receive_messages email: "solidus@commerce.com"
 
       add_mug_to_cart
       click_on "Checkout"
@@ -617,7 +625,7 @@ describe "Checkout", type: :feature, inaccessible: true do
         state_name_css = "order_bill_address_attributes_state_name"
 
         select "Canada", from: "order_bill_address_attributes_country_id"
-        fill_in 'Customer E-Mail', with: 'test@example.com'
+        fill_in 'Customer Email', with: 'test@example.com'
         fill_in state_name_css, with: xss_string
         fill_in "Zip", with: "H0H0H0"
 
@@ -672,6 +680,57 @@ describe "Checkout", type: :feature, inaccessible: true do
     end
   end
 
+  # Regression test for: https://github.com/solidusio/solidus/issues/2998
+  context 'when two shipping categories are available' do
+    let!(:first_category) { create(:shipping_category) }
+    let!(:second_category) { create(:shipping_category) }
+
+    let!(:first_shipping_method) do
+      create(:shipping_method,
+             shipping_categories: [first_category],
+             stores: [store])
+    end
+
+    let!(:second_shipping_method) do
+      create(:shipping_method,
+             shipping_categories: [second_category],
+             stores: [store])
+    end
+
+    context 'assigned to two different products' do
+      let!(:first_product) do
+        create(:product,
+               name: 'First product',
+               shipping_category: first_category)
+      end
+
+      let!(:second_product) do
+        create(:product,
+               name: 'Second product',
+               shipping_category: second_category)
+      end
+
+      before do
+        stock_location.stock_items.update_all(count_on_hand: 10)
+      end
+
+      it 'transitions successfully to the delivery step', js: true do
+        visit spree.product_path(first_product)
+        click_button 'add-to-cart-button'
+        visit spree.product_path(second_product)
+        click_button 'add-to-cart-button'
+
+        click_button 'Checkout'
+
+        fill_in_address
+        fill_in 'order_email', with: 'test@example.com'
+        click_button 'Save and Continue'
+
+        expect(Spree::Order.last.state).to eq('delivery')
+      end
+    end
+  end
+
   def fill_in_credit_card(number: "4111 1111 1111 1111")
     fill_in "Name on card", with: 'Mary Doe'
     fill_in_with_force "Card Number", with: number
@@ -681,8 +740,7 @@ describe "Checkout", type: :feature, inaccessible: true do
 
   def fill_in_address
     address = "order_bill_address_attributes"
-    fill_in "#{address}_firstname", with: "Ryan"
-    fill_in "#{address}_lastname", with: "Bigg"
+    fill_in "#{address}_name", with: "Ryan Bigg"
     fill_in "#{address}_address1", with: "143 Swan Street"
     fill_in "#{address}_city", with: "Richmond"
     select "United States of America", from: "#{address}_country_id"

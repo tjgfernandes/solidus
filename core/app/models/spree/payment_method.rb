@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'discard'
 require 'spree/preferences/statically_configurable'
 
 module Spree
@@ -15,17 +14,17 @@ module Spree
     preference :server, :string, default: 'test'
     preference :test_mode, :boolean, default: true
 
-    acts_as_paranoid
-    include Spree::ParanoiaDeprecations
-
-    include Discard::Model
-    self.discard_column = :deleted_at
+    include Spree::SoftDeletable
 
     acts_as_list
 
     # @private
     def self.const_missing(name)
       if name == :DISPLAY
+        Spree::Deprecation.warn(
+          "#{self}::DISPLAY has been deprecated and will be removed in Solidus v3.",
+          caller
+        )
         const_set(:DISPLAY, [:both, :front_end, :back_end])
       else
         super
@@ -63,7 +62,7 @@ module Spree
           @human
         ].compact
         options = { scope: [:activerecord, :models], count: 1, default: defaults }.merge!(options.except(:default))
-        I18n.translate(defaults.shift, options)
+        I18n.translate(defaults.shift, **options)
       end
     end
 
@@ -93,8 +92,8 @@ module Spree
           else
             active.available_to_users.available_to_admin
           end
-        available_payment_methods.select do |p|
-          store.nil? || store.payment_methods.empty? || store.payment_methods.include?(p)
+        available_payment_methods.select do |payment|
+          store.nil? || store.payment_methods.empty? || store.payment_methods.include?(payment)
         end
       end
 
@@ -108,9 +107,9 @@ module Spree
         where(type: to_s, active: true).count > 0
       end
 
-      # @deprecated Use .with_deleted.find instead
+      # @deprecated Use .with_discarded.find instead
       def find_with_destroyed(*args)
-        Spree::Deprecation.warn "#{self}.find_with_destroyed is deprecated. Use #{self}.with_deleted.find instead"
+        Spree::Deprecation.warn "#{self}.find_with_destroyed is deprecated. Use #{self}.with_discarded.find instead"
         unscoped { find(*args) }
       end
     end
@@ -130,9 +129,13 @@ module Spree
     def gateway
       gateway_options = options
       gateway_options.delete :login if gateway_options.key?(:login) && gateway_options[:login].nil?
-      if gateway_options[:server]
-        ActiveMerchant::Billing::Base.mode = gateway_options[:server].to_sym
-      end
+
+      # All environments except production considered to be test
+      test_server = gateway_options[:server] != 'production'
+      test_mode = gateway_options[:test_mode]
+
+      gateway_options[:test] = (test_server || test_mode)
+
       @gateway ||= gateway_class.new(gateway_options)
     end
     alias_method :provider, :gateway
@@ -195,8 +198,11 @@ module Spree
     #     4. app/views/spree/admin/payments/source_views/_{partial_name}.html.erb
     #     The view that represents your payment method on orders in the backend
     #
+    #     5. app/views/spree/api/payments/source_views/_{partial_name}.json.jbuilder
+    #     The view that represents your payment method on orders through the api
+    #
     def partial_name
-      deprecated_method_type_override || type.demodulize.downcase
+      deprecated_method_type_override || type.demodulize.underscore
     end
 
     # :nodoc:

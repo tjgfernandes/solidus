@@ -16,11 +16,11 @@ module Spree
   #    order's adjustment total. This allows an adjustment to be preserved if
   #    it becomes ineligible so it might be reinstated.
   class Adjustment < Spree::Base
-    belongs_to :adjustable, polymorphic: true, touch: true
-    belongs_to :source, polymorphic: true
-    belongs_to :order, class_name: 'Spree::Order', inverse_of: :all_adjustments
-    belongs_to :promotion_code, class_name: 'Spree::PromotionCode'
-    belongs_to :adjustment_reason, class_name: 'Spree::AdjustmentReason', inverse_of: :adjustments
+    belongs_to :adjustable, polymorphic: true, touch: true, optional: true
+    belongs_to :source, polymorphic: true, optional: true
+    belongs_to :order, class_name: 'Spree::Order', inverse_of: :all_adjustments, optional: true
+    belongs_to :promotion_code, class_name: 'Spree::PromotionCode', optional: true
+    belongs_to :adjustment_reason, class_name: 'Spree::AdjustmentReason', inverse_of: :adjustments, optional: true
 
     validates :adjustable, presence: true
     validates :order, presence: true
@@ -56,20 +56,31 @@ module Spree
     extend DisplayMoney
     money_methods :amount
 
+    # Returns Adjustments of completed Orders.
+    #
+    # @param excluded_orders [Array<Spree::Order>] Orders to exclude from query
+    # @return [ActiveRecord::Relation] Scoped Adjustments
+    def self.in_completed_orders(excluded_orders: [])
+      joins(:order).
+      merge(Spree::Order.complete).
+      where.not(spree_orders: { id: excluded_orders }).
+      distinct
+    end
+
     def finalize!
-      update_attributes!(finalized: true)
+      update!(finalized: true)
     end
 
     def unfinalize!
-      update_attributes!(finalized: false)
+      update!(finalized: false)
     end
 
     def finalize
-      update_attributes(finalized: true)
+      update(finalized: true)
     end
 
     def unfinalize
-      update_attributes(finalized: false)
+      update(finalized: false)
     end
 
     def currency
@@ -148,7 +159,7 @@ module Spree
     private
 
     def require_promotion_code?
-      promotion? && source.promotion.codes.any?
+      promotion? && !source.promotion.apply_automatically && source.promotion.codes.any?
     end
 
     def repair_adjustments_associations_on_create

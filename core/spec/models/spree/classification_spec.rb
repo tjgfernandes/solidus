@@ -34,9 +34,21 @@ module Spree
 
     context "removing product from taxon" do
       before :each do
-        p = taxon_with_5_products.products[1]
-        expect(p.classifications.first.position).to eq(2)
-        taxon_with_5_products.products.destroy(p)
+        element = taxon_with_5_products.products[1]
+        expect(element.classifications.first.position).to eq(2)
+        taxon_with_5_products.products.destroy(element)
+      end
+
+      it "resets positions" do
+        expect positions_to_be_valid(taxon_with_5_products)
+      end
+    end
+
+    context "Discard'ing a product" do
+      before :each do
+        element = taxon_with_5_products.products[1]
+        expect(element.classifications.first.position).to eq(2)
+        element.discard
       end
 
       it "resets positions" do
@@ -59,9 +71,9 @@ module Spree
 
     context "removing taxon from product" do
       before :each do
-        p = taxon_with_5_products.products[1]
-        p.taxons.destroy(taxon_with_5_products)
-        p.save!
+        element = taxon_with_5_products.products[1]
+        element.taxons.destroy(taxon_with_5_products)
+        element.save!
       end
 
       it "resets positions" do
@@ -71,9 +83,9 @@ module Spree
 
     context "replacing product's taxons" do
       before :each do
-        p = taxon_with_5_products.products[1]
-        p.taxons = []
-        p.save!
+        element = taxon_with_5_products.products[1]
+        element.taxons = []
+        element.save!
       end
 
       it "resets positions" do

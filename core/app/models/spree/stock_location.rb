@@ -16,8 +16,8 @@ module Spree
     has_many :user_stock_locations, dependent: :delete_all
     has_many :users, through: :user_stock_locations
 
-    belongs_to :state, class_name: 'Spree::State'
-    belongs_to :country, class_name: 'Spree::Country'
+    belongs_to :state, class_name: 'Spree::State', optional: true
+    belongs_to :country, class_name: 'Spree::Country', optional: true
 
     has_many :shipping_method_stock_locations, dependent: :destroy
     has_many :shipping_methods, through: :shipping_method_stock_locations
@@ -30,6 +30,8 @@ module Spree
 
     after_create :create_stock_items, if: :propagate_all_variants?
     after_save :ensure_one_default
+
+    self.whitelisted_ransackable_attributes = %w[name]
 
     def state_text
       state.try(:abbr) || state.try(:name) || state_name

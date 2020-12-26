@@ -1,7 +1,7 @@
 .tabs {
   display: flex;
   margin: 1em 0;
-  border-bottom: 1px solid $color-border;
+  border-bottom: 1px solid $color-tab-border;
   white-space: nowrap;
 
   &,
@@ -23,12 +23,13 @@
 
   // Move down one pixel to sit on top of the ul's border-bottom
   position: relative;
-  top: 1px;
+  top: 2px;
 
   > a {
+    color: $color-tab;
     display: block;
-    border: 1px solid $color-border;
-    border-radius: 2px 2px 0 0;
+    border: 1px solid $color-tab-border;
+    border-radius: 4px 4px 0 0;
     line-height: 1;
   }
 
@@ -37,19 +38,19 @@
   }
 
   &:not(.active) > a {
-    background: $color-tbl-thead;
+    background: $color-tab-bg;
   }
 
   &.active > a,
   &.active:hover {
-    background: white;
-    border-bottom-color: white;
-    color: $body-color;
+    background: $color-tab-active-bg;
+    border-bottom-color: $color-tab-active-border;
+    color: $color-tab-active;
+    font-weight: $font-weight-bold;
   }
 
   &:not(.active):hover > a {
-    background: darken($color-tbl-thead, 5%);
-    color: $link-color;
+    color: $color-tab-active;
   }
 }
 
@@ -69,7 +70,7 @@
 
   > a {
     position: relative;
-    background: white;
+    background: $color-tab-active-bg;
     z-index: 1;
 
     &:before {
@@ -80,7 +81,7 @@
   }
 
   &:hover > a {
-    background: white;
+    background: $color-tab-active-bg;
   }
 
   &:not(:hover) ul {
@@ -98,7 +99,7 @@
 .tabs li.in-dropdown {
   a {
     display: block;
-    border: 1px solid $color-border;
+    border: 1px solid $color-tab-border;
     background: white;
   }
 

@@ -27,6 +27,11 @@ RSpec.describe Spree::Shipment, type: :model do
   let(:line_item) { mock_model(Spree::LineItem, variant: variant) }
 
   context '#transfer_to_location' do
+    before do
+      allow(Spree::Deprecation).to receive(:warn).
+        with(/^Please use the Spree::FulfilmentChanger class instead of Spree::Shipment#transfer_to_location/, any_args)
+    end
+
     it 'transfers unit to a new shipment with given location' do
       order = create(:completed_order_with_totals, line_items_count: 2)
       shipment = order.shipments.first
@@ -34,9 +39,7 @@ RSpec.describe Spree::Shipment, type: :model do
 
       aggregate_failures("verifying new shipment attributes") do
         expect do
-          Spree::Deprecation.silence do
-            shipment.transfer_to_location(variant, 1, stock_location)
-          end
+          shipment.transfer_to_location(variant, 1, stock_location)
         end.to change { Spree::Shipment.count }.by(1)
 
         new_shipment = order.shipments.order(:created_at).last
@@ -144,15 +147,17 @@ RSpec.describe Spree::Shipment, type: :model do
   end
 
   it "#discounted_cost" do
+    expect(Spree::Deprecation).to receive(:warn).
+      with(/^discounted_cost is deprecated and will be removed/, any_args)
     shipment = create(:shipment)
     shipment.cost = 10
     shipment.promo_total = -1
-    expect(Spree::Deprecation.silence { shipment.discounted_cost }).to eq(9)
+    expect(shipment.discounted_cost).to eq(9)
   end
 
   describe '#total_before_tax' do
     before do
-      shipment.update_attributes!(cost: 10)
+      shipment.update!(cost: 10)
     end
     let!(:admin_adjustment) { create(:adjustment, adjustable: shipment, order: shipment.order, amount: -1, source: nil) }
     let!(:promo_adjustment) { create(:adjustment, adjustable: shipment, order: shipment.order, amount: -2, source: promo_action) }
@@ -250,7 +255,7 @@ RSpec.describe Spree::Shipment, type: :model do
       end
 
       it "can't get rates without a shipping address" do
-        shipment.order.update_attributes!(ship_address: nil)
+        shipment.order.update!(ship_address: nil)
         expect(shipment.refresh_rates).to eq([])
       end
 
@@ -298,7 +303,7 @@ RSpec.describe Spree::Shipment, type: :model do
     shared_examples_for "pending if backordered" do
       it "should have a state of pending if backordered" do
         # Set as ready so we can test for change
-        shipment.update_attributes!(state: 'ready')
+        shipment.update!(state: 'ready')
 
         allow(shipment).to receive_messages(inventory_units: [mock_model(Spree::InventoryUnit, allow_ship?: false, canceled?: false, shipped?: false)])
         expect(shipment).to receive(:update_columns).with(state: 'pending', updated_at: kind_of(Time))
@@ -310,7 +315,7 @@ RSpec.describe Spree::Shipment, type: :model do
       before { allow(order).to receive_messages can_ship?: false }
       it "should result in a 'pending' state" do
         # Set as ready so we can test for change
-        shipment.update_attributes!(state: 'ready')
+        shipment.update!(state: 'ready')
         expect(shipment).to receive(:update_columns).with(state: 'pending', updated_at: kind_of(Time))
         shipment.update_state
       end
@@ -328,7 +333,7 @@ RSpec.describe Spree::Shipment, type: :model do
 
     context "when payment is not required" do
       before do
-        Spree::Config[:require_payment_to_ship] = false
+        stub_spree_preferences(require_payment_to_ship: false)
       end
 
       it "should result in a 'ready' state" do
@@ -391,7 +396,7 @@ RSpec.describe Spree::Shipment, type: :model do
     end
 
     context "with inventory tracking" do
-      before { Spree::Config.set track_inventory_levels: true }
+      before { stub_spree_preferences(track_inventory_levels: true) }
 
       it "should validate with inventory" do
         shipment.inventory_units = [create(:inventory_unit)]
@@ -400,7 +405,7 @@ RSpec.describe Spree::Shipment, type: :model do
     end
 
     context "without inventory tracking" do
-      before { Spree::Config.set track_inventory_levels: false }
+      before { stub_spree_preferences(track_inventory_levels: false) }
 
       it "should validate with no inventory" do
         expect(shipment.valid?).to be true
@@ -768,8 +773,8 @@ RSpec.describe Spree::Shipment, type: :model do
         .to receive(:new).and_return(inventory_unit_finalizer)
 
       stock_item.set_count_on_hand(10)
-      stock_item.update_attributes!(backorderable: false)
-      inventory_unit.update_attributes!(pending: true)
+      stock_item.update!(backorderable: false)
+      inventory_unit.update!(pending: true)
     end
 
     subject { shipment.finalize! }

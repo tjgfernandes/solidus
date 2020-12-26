@@ -12,12 +12,6 @@ module Spree
       stub_authentication!
     end
 
-    def check_option_values(option_values)
-      expect(option_values.count).to eq(1)
-      expect(option_values.first).to have_attributes([:id, :name, :presentation,
-                                                      :option_type_name, :option_type_id])
-    end
-
     context "without any option type scoping" do
       before do
         # Create another option value with a brand new option type
@@ -48,9 +42,9 @@ module Spree
       end
 
       it "can retrieve a list of option types" do
-        option_value_1 = create(:option_value, option_type: option_type)
+        option_value_one = create(:option_value, option_type: option_type)
         create(:option_value, option_type: option_type)
-        get spree.api_option_values_path, params: { ids: [option_value.id, option_value_1.id] }
+        get spree.api_option_values_path, params: { ids: [option_value.id, option_value_one.id] }
         expect(json_response.count).to eq(2)
       end
 
@@ -114,6 +108,16 @@ module Spree
 
           option_value.reload
           expect(option_value.name).to eq("Option Value")
+        end
+
+        it "can create an option value" do
+          post spree.api_option_values_path, params: { option_value: {
+                                name: "Option Value",
+                                presentation: 'option value'
+                              } }
+          expect(response.status).to eq(201)
+
+          expect(json_response).to have_attributes(attributes)
         end
 
         it "permits the correct attributes" do

@@ -17,12 +17,12 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
           let!(:checkout_zone) { create(:zone, name: "Checkout Zone", countries: [canada]) }
 
           before do
-            Spree::Config.checkout_zone = checkout_zone.name
+            stub_spree_preferences(checkout_zone: checkout_zone.name)
           end
 
           context "and default_country_iso of the Canada" do
             before do
-              Spree::Config.default_country_iso = Spree::Country.find_by!(iso: "CA").iso
+              stub_spree_preferences(default_country_iso: Spree::Country.find_by!(iso: "CA").iso)
             end
 
             it 'defaults the shipping address country to Canada' do
@@ -38,7 +38,7 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
 
           context "and default_country_iso of the United States" do
             before do
-              Spree::Config.default_country_iso = Spree::Country.find_by!(iso: "US").iso
+              stub_spree_preferences(default_country_iso: Spree::Country.find_by!(iso: "US").iso)
             end
 
             it 'defaults the shipping address country to nil' do
@@ -53,6 +53,13 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
           end
         end
       end
+      context "existent order id not given" do
+        it "redirects and flashes about the non-existent order" do
+          get :edit, params: { order_id: 'non-existent-order' }
+          expect(response).to redirect_to(spree.admin_orders_path)
+          expect(flash[:error]).to eql("Order is not found")
+        end
+      end
     end
 
     context "#update" do
@@ -61,7 +68,7 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
       before { allow(Spree::Order).to receive_message_chain(:includes, :find_by!) { order } }
 
       it "updates + progresses the order" do
-        expect(order).to receive(:update_attributes) { true }
+        expect(order).to receive(:update) { true }
         expect(order).to receive(:next) { false }
         attributes = { order_id: order.number, order: { email: "" } }
         put :update, params: attributes
@@ -109,7 +116,7 @@ describe Spree::Admin::Orders::CustomerDetailsController, type: :controller do
 
       context "not false guest checkout param" do
         it "does not attempt to associate the user" do
-          allow(order).to receive_messages(update_attributes: true,
+          allow(order).to receive_messages(update: true,
                                            next: false,
                                            refresh_shipment_rates: true)
 

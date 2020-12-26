@@ -2,11 +2,10 @@
 
 class Spree::Base < ActiveRecord::Base
   include Spree::Preferences::Preferable
+  include Spree::Core::Permalinks
   serialize :preferences, Hash
 
   include Spree::RansackableAttributes
-
-  self.belongs_to_required_by_default = false
 
   def initialize_preference_defaults
     if has_attribute?(:preferences)

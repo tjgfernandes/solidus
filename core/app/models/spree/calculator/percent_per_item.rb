@@ -15,10 +15,12 @@ module Spree
     preference :percent, :decimal, default: 0
 
     def compute(object = nil)
+      Spree::Deprecation.warn('This method is deprecated, please use adjustments at line item level')
+
       return 0 if object.nil?
-      object.line_items.map { |line_item|
+      object.line_items.sum { |line_item|
         value_for_line_item(line_item)
-      }.sum
+      }
     end
 
     private
@@ -28,9 +30,9 @@ module Spree
     # Copied from per_item.rb
     def matching_products
       if compute_on_promotion?
-        calculable.promotion.rules.map do |rule|
+        calculable.promotion.rules.flat_map do |rule|
           rule.respond_to?(:products) ? rule.products : []
-        end.flatten
+        end
       end
     end
 

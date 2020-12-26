@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
+require 'active_support/all'
 require 'spec_helper'
 require 'spree/event'
 
-RSpec.describe Spree::Event do
+RSpec.describe Spree::Event::Subscriber do
   module M
     include Spree::Event::Subscriber
 
@@ -14,15 +15,33 @@ RSpec.describe Spree::Event do
     end
 
     def other_event(event)
-      # ...
+      # not registered via event_action
     end
   end
 
   describe '::subscribe!' do
-    before { M.unsubscribe! }
+    it 'is deprecated in favor of ::activate' do
+      allow(M).to receive(:activate)
+      expect(Spree::Deprecation).to receive(:warn)
+
+      M.subscribe!
+    end
+  end
+
+  describe '::unsubscribe!' do
+    it 'is deprecated in favor of ::unsubscribe' do
+      allow(M).to receive(:deactivate)
+      expect(Spree::Deprecation).to receive(:warn)
+
+      M.unsubscribe!
+    end
+  end
+
+  describe '::activate' do
+    before { M.deactivate }
 
     it 'adds new listeners to Spree::Event' do
-      expect { M.subscribe! }.to change { Spree::Event.listeners }
+      expect { M.activate }.to change { Spree::Event.listeners }
     end
 
     context 'when subscriptions are not registered' do
@@ -33,31 +52,31 @@ RSpec.describe Spree::Event do
     end
 
     it 'subscribes event actions' do
-      M.subscribe!
+      M.activate
       expect(M).to receive(:event_name)
       Spree::Event.fire 'event_name'
     end
 
     it 'does not subscribe event actions more than once' do
-      2.times { M.subscribe! }
+      2.times { M.activate }
       expect(M).to receive(:event_name).once
       Spree::Event.fire 'event_name'
     end
   end
 
-  describe '::unsubscribe' do
-    before { M.subscribe! }
+  describe '::deactivate' do
+    before { M.activate }
 
     it 'removes the subscription' do
       expect(M).not_to receive(:event_name)
-      M.unsubscribe!
+      M.deactivate
       Spree::Event.fire 'event_name'
     end
   end
 
   describe '::event_action' do
     context 'when the action has not been declared' do
-      before { M.subscribe! }
+      before { M.activate }
 
       it 'does not subscribe the action' do
         expect(M).not_to receive(:other_event)
@@ -68,11 +87,11 @@ RSpec.describe Spree::Event do
     context 'when the action is declared' do
       before do
         M.event_action :other_event
-        M.subscribe!
+        M.activate
       end
 
       after do
-        M.unsubscribe!
+        M.deactivate
         M.event_actions.delete(:other_event)
       end
 

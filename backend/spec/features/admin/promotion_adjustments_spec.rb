@@ -167,6 +167,15 @@ describe "Promotion Adjustments", type: :feature, js: true do
       expect(promotion.actions.first).to be_a(Spree::Promotion::Actions::FreeShipping)
     end
 
+    it "disables the button at submit", :js do
+      page.execute_script "$('form').submit(function(e) { e.preventDefault()})"
+      fill_in "Name", with: "SAVE SAVE SAVE"
+      choose "Apply to all orders"
+      click_button "Create"
+
+      expect(page).to have_button("Create", disabled: true)
+    end
+
     it "should allow an admin to create an automatic promotion" do
       fill_in "Name", with: "SAVE SAVE SAVE"
       choose "Apply to all orders"
@@ -229,6 +238,27 @@ describe "Promotion Adjustments", type: :feature, js: true do
       expect(first_action.class).to eq(Spree::Promotion::Actions::CreateAdjustment)
       expect(first_action.calculator.class).to eq(Spree::Calculator::FlatRate)
       expect(first_action.calculator.preferred_amount).to eq(5)
+    end
+
+    context 'creating a promotion with discount rules and adjustments' do
+      before do
+        fill_in "Name", with: "SAVE SAVE SAVE"
+        choose "Apply to all orders"
+        click_button "Create"
+        expect(page).to have_title("SAVE SAVE SAVE - Promotions")
+      end
+
+      it "should not allow an Discount Rule to be added without selecting an option" do
+        within('#rule_fields') { click_button "Add" }
+        message = page.find("#promotion_rule_type").native.attribute("validationMessage")
+        expect(message).to eq "Please select an item in the list."
+      end
+
+      it "should not allow an Adjusment type to be added without selecting an option" do
+        within('#action_fields') { click_button "Add" }
+        message = page.find("#action_type").native.attribute("validationMessage")
+        expect(message).to eq "Please select an item in the list."
+      end
     end
 
     context 'creating a promotion with promotion action that has a calculator with complex preferences' do

@@ -4,8 +4,8 @@ module Spree
   # The default `source` of a `Spree::Payment`.
   #
   class CreditCard < Spree::PaymentSource
-    belongs_to :user, class_name: Spree::UserClassHandle.new, foreign_key: 'user_id'
-    belongs_to :address
+    belongs_to :user, class_name: Spree::UserClassHandle.new, foreign_key: 'user_id', optional: true
+    belongs_to :address, optional: true
 
     before_save :set_last_digits
 
@@ -47,13 +47,13 @@ module Spree
     }.freeze
 
     def default
-      Spree::Deprecation.warn("CreditCard.default is deprecated. Please use user.wallet.default_wallet_payment_source instead.", caller)
+      Spree::Deprecation.warn("CreditCard#default is deprecated. Please use user.wallet.default_wallet_payment_source instead.", caller)
       return false if user.nil?
       user.wallet.default_wallet_payment_source.try!(:payment_source) == self
     end
 
     def default=(set_as_default)
-      Spree::Deprecation.warn("CreditCard.default= is deprecated. Please use user.wallet.default_wallet_payment_source= instead.", caller)
+      Spree::Deprecation.warn("CreditCard#default= is deprecated. Please use user.wallet.default_wallet_payment_source= instead.", caller)
       if user.nil?
         raise "Cannot set 'default' on a credit card without a user"
       elsif set_as_default # setting this card as default
@@ -163,7 +163,7 @@ module Spree
     #   the object to ActiveMerchant.
     # @return [String] the first name on this credit card
     def first_name
-      name.to_s.split(/[[:space:]]/, 2)[0]
+      Spree::Address::Name.new(name).first_name
     end
 
     # @note ActiveMerchant needs first_name/last_name because we pass it a
@@ -172,7 +172,7 @@ module Spree
     #   the object to ActiveMerchant.
     # @return [String] the last name on this credit card
     def last_name
-      name.to_s.split(/[[:space:]]/, 2)[1]
+      Spree::Address::Name.new(name).last_name
     end
 
     # @return [ActiveMerchant::Billing::CreditCard] an ActiveMerchant credit

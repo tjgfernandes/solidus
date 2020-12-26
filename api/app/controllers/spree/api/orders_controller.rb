@@ -53,12 +53,11 @@ module Spree
       end
 
       def index
-        authorize! :index, Order
+        authorize! :admin, Order
         orders_includes = [
-          :user,
-          :payments,
-          :adjustments,
-          :line_items
+          { user: :store_credits },
+          :line_items,
+          :valid_store_credit_payments
         ]
         @orders = paginate(
           Spree::Order
@@ -131,7 +130,13 @@ module Spree
       end
 
       def normalize_params
-        params[:order][:payments_attributes] = params[:order].delete(:payments) if params[:order][:payments]
+        if params[:order][:payments]
+          payments_params = params[:order].delete(:payments)
+          params[:order][:payments_attributes] = payments_params.map do |payment_params|
+            payment_params[:source_attributes] = payment_params.delete(:source) if payment_params[:source].present?
+            payment_params
+          end
+        end
         params[:order][:shipments_attributes] = params[:order].delete(:shipments) if params[:order][:shipments]
         params[:order][:line_items_attributes] = params[:order].delete(:line_items) if params[:order][:line_items]
         params[:order][:ship_address_attributes] = params[:order].delete(:ship_address) if params[:order][:ship_address].present?
@@ -168,7 +173,13 @@ module Spree
       end
 
       def find_order(_lock = false)
-        @order = Spree::Order.find_by!(number: params[:id])
+        @order = Spree::Order.
+          includes(line_items: [:adjustments, { variant: :images }],
+                   payments: :payment_method,
+                   shipments: {
+                     shipping_rates: { shipping_method: :zones, taxes: :tax_rate }
+                   }).
+          find_by!(number: params[:id])
       end
 
       def order_id

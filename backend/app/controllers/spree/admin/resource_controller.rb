@@ -5,7 +5,10 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
 
   helper_method :new_object_url, :edit_object_url, :object_url, :collection_url
   before_action :load_resource, except: :update_positions
-  rescue_from ActiveRecord::RecordNotFound, with: :resource_not_found
+  rescue_from ActiveRecord::RecordNotFound do |exception|
+    resource_not_found(flash_class: exception.model.constantize)
+  end
+  rescue_from ActiveRecord::RecordInvalid, with: :resource_invalid
 
   respond_to :html
 
@@ -30,7 +33,7 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
 
   def update
     invoke_callbacks(:update, :before)
-    if @object.update_attributes(permitted_resource_params)
+    if @object.update(permitted_resource_params)
       invoke_callbacks(:update, :after)
       respond_with(@object) do |format|
         format.html do
@@ -76,7 +79,7 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
   def update_positions
     ActiveRecord::Base.transaction do
       params[:positions].each do |id, index|
-        model_class.find(id).set_list_position(index)
+        model_class.find_by(id: id)&.set_list_position(index)
       end
     end
 
@@ -107,8 +110,14 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
     else
       invoke_callbacks(:destroy, :fails)
       respond_with(@object) do |format|
-        format.html { redirect_to location_after_destroy }
-        format.js { render status: :unprocessable_entity, plain: @object.errors.full_messages.join(', ') }
+        message = @object.errors.full_messages.to_sentence
+        format.html do
+          flash[:error] = message
+          redirect_to location_after_destroy
+        end
+        format.js do
+          render status: :unprocessable_entity, plain: message
+        end
       end
     end
   end
@@ -123,12 +132,12 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
       @parent_data[:model_name] = model_name
       @parent_data[:model_class] = (options[:model_class] || model_name.to_s.classify.constantize)
       @parent_data[:find_by] = options[:find_by] || :id
+      @parent_data[:includes] = options[:includes]
     end
   end
 
-  def resource_not_found
-    flash[:error] = flash_message_for(model_class.new, :not_found)
-    redirect_to collection_url
+  def resource_not_found(flash_class: model_class, redirect_url: collection_url)
+    super
   end
 
   def model_class
@@ -183,12 +192,16 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
 
   def parent
     if parent?
-      @parent ||= self.class.parent_data[:model_class].find_by(self.class.parent_data[:find_by] => params["#{parent_model_name}_id"])
+      @parent ||= self.class.parent_data[:model_class]
+                    .includes(self.class.parent_data[:includes])
+                    .find_by!(self.class.parent_data[:find_by] => params["#{parent_model_name}_id"])
       instance_variable_set("@#{parent_model_name}", @parent)
     else
       Spree::Deprecation.warn "Calling #parent is deprecated on a ResourceController which has not defined a belongs_to"
       nil
     end
+  rescue ActiveRecord::RecordNotFound => e
+    resource_not_found(flash_class: e.model.constantize, redirect_url: spree.polymorphic_url([:admin, parent_model_name.pluralize]))
   end
 
   def parent?
@@ -212,7 +225,8 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
   end
 
   def collection
-    return parent.send(controller_name) if parent?
+    return parent.send(controller_name) if parent? && parent
+
     if model_class.respond_to?(:accessible_by) && !current_ability.has_block?(params[:action], model_class)
       model_class.accessible_by(current_ability, action)
     else
@@ -289,5 +303,20 @@ class Spree::Admin::ResourceController < Spree::Admin::BaseController
 
   def render_after_update_error
     render action: 'edit'
+  end
+
+  def resource_invalid(exception)
+    invoke_callbacks(action, :fails)
+    respond_with(@object) do |format|
+      format.html do
+        flash.now[:error] = exception.message
+        if @object.new_record?
+          render_after_create_error
+        else
+          render_after_update_error
+        end
+      end
+      format.js { render layout: false }
+    end
   end
 end

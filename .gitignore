@@ -12,7 +12,7 @@ Gemfile.lock
 Gemfile-custom
 log
 pkg
-sandbox
+/sandbox
 **/spec/dummy
 **/spec/examples.txt
 tmp
@@ -27,3 +27,6 @@ tags
 .sass-cache
 .localeapp
 .yardoc
+node_modules
+yarn.lock
+package-lock.json

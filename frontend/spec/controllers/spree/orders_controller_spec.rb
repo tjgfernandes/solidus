@@ -102,6 +102,31 @@ describe Spree::OrdersController, type: :controller do
       end
     end
 
+    context '#edit' do
+      before do
+        allow(controller).to receive :authorize!
+        allow(controller).to receive_messages current_order: order
+      end
+
+      it 'should render cart' do
+        get :edit, params: { id: order.number }
+
+        expect(flash[:error]).to be_nil
+        expect(response).to be_ok
+      end
+
+      context 'with another order number than the current_order' do
+        let(:other_order) { create(:completed_order_with_totals) }
+
+        it 'should display error message' do
+          get :edit, params: { id: other_order.number }
+
+          expect(flash[:error]).to eq "You may only edit your current shopping cart."
+          expect(response).to redirect_to cart_path
+        end
+      end
+    end
+
     context "#update" do
       context "with authorization" do
         before do
@@ -117,13 +142,13 @@ describe Spree::OrdersController, type: :controller do
         end
 
         it "should redirect to cart path (on success)" do
-          allow(order).to receive(:update_attributes).and_return true
+          allow(order).to receive(:update).and_return true
           put :update
           expect(response).to redirect_to(spree.cart_path)
         end
 
         it "should advance the order if :checkout button is pressed" do
-          allow(order).to receive(:update_attributes).and_return true
+          allow(order).to receive(:update).and_return true
           expect(order).to receive(:next)
           put :update, params: { checkout: true }
           expect(response).to redirect_to checkout_state_path('address')
@@ -224,6 +249,27 @@ describe Spree::OrdersController, type: :controller do
       expect(order.line_items.count).to eq 1
       put :update, params: { order: { line_items_attributes: { "0" => { id: line_item.id, quantity: 0 } } } }
       expect(order.reload.line_items.count).to eq 0
+    end
+  end
+
+  describe '#edit' do
+    subject { get :edit }
+    let(:user) { build :user }
+
+    it "builds a new valid order with complete meta-data" do
+      allow(controller).to receive_messages(try_spree_current_user: user)
+
+      subject
+
+      order = controller.instance_variable_get(:@order)
+
+      aggregate_failures do
+        expect(order).to be_valid
+        expect(order).not_to be_persisted
+        expect(order.store).to be_present
+        expect(order.user).to eq(user)
+        expect(order.created_by).to eq(user)
+      end
     end
   end
 end

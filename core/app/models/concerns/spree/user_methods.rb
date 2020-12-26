@@ -34,12 +34,13 @@ module Spree
 
       include Spree::RansackableAttributes unless included_modules.include?(Spree::RansackableAttributes)
 
+      ransack_alias :firstname_or_lastname, :addresses_firstname_or_addresses_lastname
       self.whitelisted_ransackable_associations = %w[addresses spree_roles]
-      self.whitelisted_ransackable_attributes = %w[id email created_at]
+      self.whitelisted_ransackable_attributes = %w[firstname_or_lastname id email created_at]
     end
 
     def wallet
-      Spree::Wallet.new(self)
+      @wallet ||= Spree::Wallet.new(self)
     end
 
     # has_spree_role? simply needs to return true or false whether a user has a role or not.
@@ -73,8 +74,8 @@ module Spree
     deprecate total_available_store_credit: :available_store_credit_total, deprecator: Spree::Deprecation
 
     def available_store_credit_total(currency:)
-      store_credits.reload.to_a.
-        select { |c| c.currency == currency }.
+      store_credits.to_a.
+        select { |credit| credit.currency == currency }.
         sum(&:amount_remaining)
     end
 

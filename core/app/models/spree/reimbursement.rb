@@ -4,8 +4,8 @@ module Spree
   class Reimbursement < Spree::Base
     class IncompleteReimbursementError < StandardError; end
 
-    belongs_to :order, inverse_of: :reimbursements
-    belongs_to :customer_return, inverse_of: :reimbursements, touch: true
+    belongs_to :order, inverse_of: :reimbursements, optional: true
+    belongs_to :customer_return, inverse_of: :reimbursements, touch: true, optional: true
 
     has_many :refunds, inverse_of: :reimbursement
     has_many :credits, inverse_of: :reimbursement, class_name: 'Spree::Reimbursement::Credit'
@@ -59,15 +59,7 @@ module Spree
     class_attribute :reimbursement_failure_hooks
     self.reimbursement_failure_hooks = []
 
-    state_machine :reimbursement_status, initial: :pending do
-      event :errored do
-        transition to: :errored, from: [:pending, :errored]
-      end
-
-      event :reimbursed do
-        transition to: :reimbursed, from: [:pending, :errored]
-      end
-    end
+    include ::Spree::Config.state_machines.reimbursement
 
     class << self
       def build_from_customer_return(customer_return)
@@ -112,11 +104,21 @@ module Spree
       if unpaid_amount_within_tolerance?
         reimbursed!
         Spree::Event.fire 'reimbursement_reimbursed', reimbursement: self
-        reimbursement_success_hooks.each { |h| h.call self }
+        if reimbursement_success_hooks.any?
+          Spree::Deprecation.warn \
+            "reimbursement_success_hooks are deprecated. Please remove them " \
+            "and subscribe to `reimbursement_reimbursed` event instead", caller(1)
+        end
+        reimbursement_success_hooks.each { |hook| hook.call self }
       else
         errored!
         Spree::Event.fire 'reimbursement_errored', reimbursement: self
-        reimbursement_failure_hooks.each { |h| h.call self }
+        if reimbursement_failure_hooks.any?
+          Spree::Deprecation.warn \
+            "reimbursement_failure_hooks are deprecated. Please remove them " \
+            "and subscribe to `reimbursement_errored` event instead", caller(1)
+        end
+        reimbursement_failure_hooks.each { |hook| hook.call self }
       end
 
       if errored?
@@ -159,6 +161,23 @@ module Spree
       return_items.each(&:accept!)
       save!
       perform!(created_by: created_by)
+    end
+
+    # The returned category is used as the category
+    # for Spree::Reimbursement::Credit.default_creditable_class.
+    #
+    # @return [Spree::StoreCreditCategory]
+    def store_credit_category
+      if Spree::Config.use_legacy_store_credit_reimbursement_category_name
+        Spree::Deprecation.warn("Using the legacy reimbursement_category_name is deprecated. "\
+          "Set Spree::Config.use_legacy_store_credit_reimbursement_category_name to false to use "\
+          "the new version instead.", caller)
+
+        name = Spree::StoreCreditCategory.reimbursement_category_name
+        return Spree::StoreCreditCategory.find_by(name: name) || Spree::StoreCreditCategory.first
+      end
+
+      Spree::StoreCreditCategory.find_by(name: Spree::StoreCreditCategory::REIMBURSEMENT)
     end
 
     private

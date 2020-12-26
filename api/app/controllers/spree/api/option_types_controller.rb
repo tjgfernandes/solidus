@@ -5,15 +5,15 @@ module Spree
     class OptionTypesController < Spree::Api::BaseController
       def index
         if params[:ids]
-          @option_types = Spree::OptionType.includes(:option_values).accessible_by(current_ability, :read).where(id: params[:ids].split(','))
+          @option_types = Spree::OptionType.includes(:option_values).accessible_by(current_ability).where(id: params[:ids].split(','))
         else
-          @option_types = Spree::OptionType.includes(:option_values).accessible_by(current_ability, :read).load.ransack(params[:q]).result
+          @option_types = Spree::OptionType.includes(:option_values).accessible_by(current_ability).load.ransack(params[:q]).result
         end
         respond_with(@option_types)
       end
 
       def show
-        @option_type = Spree::OptionType.accessible_by(current_ability, :read).find(params[:id])
+        @option_type = Spree::OptionType.accessible_by(current_ability, :show).find(params[:id])
         respond_with(@option_type)
       end
 
@@ -29,7 +29,7 @@ module Spree
 
       def update
         @option_type = Spree::OptionType.accessible_by(current_ability, :update).find(params[:id])
-        if @option_type.update_attributes(option_type_params)
+        if @option_type.update(option_type_params)
           render :show
         else
           invalid_resource!(@option_type)

@@ -51,13 +51,18 @@ RSpec.describe Spree::Promotion::Rules::FirstOrder, type: :model do
             expect(rule.eligibility_errors.full_messages.first).
               to eq "This coupon code can only be applied to your first order."
           end
+          it "sets an error code" do
+            rule.eligible?(order)
+            expect(rule.eligibility_errors.details[:base].first[:error_code]).
+              to eq :not_first_order
+          end
         end
       end
     end
 
     context "for a guest user" do
-      let(:email) { 'user@spreecommerce.com' }
-      before { allow(order).to receive_messages email: 'user@spreecommerce.com' }
+      let(:email) { 'user@solidus.io' }
+      before { allow(order).to receive_messages email: 'user@solidus.io' }
 
       context "with no other orders" do
         it { expect(rule).to be_eligible(order) }
@@ -70,6 +75,11 @@ RSpec.describe Spree::Promotion::Rules::FirstOrder, type: :model do
           rule.eligible?(order)
           expect(rule.eligibility_errors.full_messages.first).
             to eq "This coupon code can only be applied to your first order."
+        end
+        it "sets an error code" do
+          rule.eligible?(order)
+          expect(rule.eligibility_errors.details[:base].first[:error_code]).
+            to eq :not_first_order
         end
       end
     end

@@ -13,7 +13,7 @@ module Spree
     has_many :shipping_method_zones, dependent: :destroy
     has_many :shipping_methods, through: :shipping_method_zones
 
-    validates :name, presence: true, uniqueness: { allow_blank: true }
+    validates :name, presence: true, uniqueness: { allow_blank: true, case_sensitive: true }
     after_save :remove_defunct_members
 
     scope :with_member_ids, ->(state_ids, country_ids) do
@@ -40,9 +40,9 @@ module Spree
     end
 
     alias :members :zone_members
-    accepts_nested_attributes_for :zone_members, allow_destroy: true, reject_if: proc { |a| a['zoneable_id'].blank? }
+    accepts_nested_attributes_for :zone_members, allow_destroy: true, reject_if: proc { |member| member['zoneable_id'].blank? }
 
-    self.whitelisted_ransackable_attributes = ['description']
+    self.whitelisted_ransackable_attributes = %w[name description]
 
     # Returns all zones that contain any of the zone members of the zone passed
     # in. This also includes any country zones that contain the state of the

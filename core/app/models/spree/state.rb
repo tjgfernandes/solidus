@@ -2,7 +2,7 @@
 
 module Spree
   class State < Spree::Base
-    belongs_to :country, class_name: 'Spree::Country'
+    belongs_to :country, class_name: 'Spree::Country', optional: true
     has_many :addresses, dependent: :nullify
 
     validates :country, :name, presence: true
@@ -19,10 +19,12 @@ module Spree
       deprecate find_all_by_name_or_abbr: :with_name_or_abbr, deprecator: Spree::Deprecation
     end
 
+    self.whitelisted_ransackable_attributes = %w[name]
+
     # table of { country.id => [ state.id , state.name ] }, arrays sorted by name
     # blank is added elsewhere, if needed
     def self.states_group_by_country_id
-      state_info = Hash.new { |h, k| h[k] = [] }
+      state_info = Hash.new { |hash, key| hash[key] = [] }
       order(:name).each { |state|
         state_info[state.country_id.to_s].push [state.id, state.name]
       }

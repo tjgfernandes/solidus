@@ -54,7 +54,7 @@ describe "Products", type: :feature do
       context "currency displaying" do
         context "using Russian Rubles" do
           before do
-            Spree::Config[:currency] = "RUB"
+            stub_spree_preferences(currency: "RUB")
           end
 
           let!(:product) do
@@ -72,7 +72,7 @@ describe "Products", type: :feature do
       end
       context "when none of the product prices are in the same currency as the default in the store" do
         before do
-          Spree::Config[:currency] = "MXN"
+          stub_spree_preferences(currency: "MXN")
         end
 
         let!(:product) do
@@ -80,7 +80,7 @@ describe "Products", type: :feature do
         end
 
         it 'defaults it to Spree::Config.currency and sets the price as blank' do
-          Spree::Config[:currency] = "USD"
+          stub_spree_preferences(currency: "USD")
           visit spree.admin_product_path(product)
           within("#product_price_field") do
             expect(page).to have_content("USD")
@@ -99,7 +99,7 @@ describe "Products", type: :feature do
         expect(page).not_to have_content("apache baseball cap")
         check "Show Deleted"
         click_button 'Search'
-        expect(find('input[name="q[with_deleted]"]')).to be_checked
+        expect(find('input[name="q[with_discarded]"]')).to be_checked
         expect(page).to have_content("zomg shirt")
         expect(page).to have_content("apache baseball cap")
         uncheck "Show Deleted"
@@ -156,6 +156,7 @@ describe "Products", type: :feature do
     context "creating a new product" do
       before(:each) do
         @shipping_category = create(:shipping_category)
+        @tax_category = create(:tax_category, name: 'Alcohol taxes', is_default: true)
         click_nav "Products"
         click_on "New Product"
       end
@@ -170,6 +171,18 @@ describe "Products", type: :feature do
         expect(page).to have_content("successfully created!")
         click_button "Update"
         expect(page).to have_content("successfully updated!")
+      end
+
+      it "disables the button at submit", :js do
+        page.execute_script "$('form').submit(function(e) { e.preventDefault()})"
+        fill_in "product_name", with: "Baseball Cap"
+        fill_in "product_sku", with: "B100"
+        fill_in "product_price", with: "100"
+        fill_in "product_available_on", with: "2012/01/24"
+        select @shipping_category.name, from: "product_shipping_category_id"
+        click_button "Create"
+
+        expect(page).to have_button("Create", disabled: true)
       end
 
       it "should show validation errors", js: false do
@@ -227,6 +240,10 @@ describe "Products", type: :feature do
         click_button "Update"
         expect(page).to have_content("successfully updated!")
       end
+
+      it "should show default tax category" do
+        expect(page).to have_select('product_tax_category_id', selected: 'Alcohol taxes')
+      end
     end
 
     context "cloning a product", js: true do
@@ -270,6 +287,14 @@ describe "Products", type: :feature do
         expect(page).to have_content("successfully updated!")
         expect(Spree::Product.last.available_on).to eq('Tue, 25 Dec 2012 00:00:00 UTC +00:00')
       end
+
+      it 'should correctly update discontinue_on' do
+        visit spree.admin_product_path(product)
+        fill_in "product_discontinue_on", with: "2020/12/4"
+        click_button "Update"
+        expect(page).to have_content("successfully updated!")
+        expect(product.reload.discontinue_on.to_s).to eq('2020-12-04 00:00:00 UTC')
+      end
     end
 
     context 'deleting a product', js: true do
@@ -289,7 +314,7 @@ describe "Products", type: :feature do
         check "Show Deleted"
         click_button "Search"
         click_link product.name
-        expect(page).to have_field('Master Price', with: product.price.to_f)
+        expect(page).to_not have_field('Master Price')
         expect(page).to_not have_content('Images')
         expect(page).to_not have_content('Prices')
         expect(page).to_not have_content('Product Properties')
@@ -303,7 +328,7 @@ describe "Products", type: :feature do
     end
 
     custom_authorization! do |_user|
-      can [:admin, :update, :index, :read], Spree::Product
+      can [:admin, :update, :index, :show], Spree::Product
     end
     let!(:product) { create(:product) }
 

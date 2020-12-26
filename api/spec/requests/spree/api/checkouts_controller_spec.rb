@@ -6,7 +6,7 @@ module Spree
   describe Api::CheckoutsController, type: :request do
     before(:each) do
       stub_authentication!
-      Spree::Config[:track_inventory_levels] = false
+      stub_spree_preferences(track_inventory_levels: false)
       country_zone = create(:zone, name: 'CountryZone')
       @state = create(:state)
       @country = @state.country
@@ -15,10 +15,6 @@ module Spree
 
       @shipping_method = create(:shipping_method, zones: [country_zone])
       @payment_method = create(:credit_card_payment_method)
-    end
-
-    after do
-      Spree::Config[:track_inventory_levels] = true
     end
 
     context "PUT 'update'" do
@@ -63,12 +59,8 @@ module Spree
       end
 
       it "will return an error if the order cannot transition" do
-        skip "not sure if this test is valid"
-        order.bill_address = nil
-        order.save
-        order.update_column(:state, "address")
+        order.update!(state: 'address', ship_address: nil)
         put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token }
-        # Order has not transitioned
         expect(response.status).to eq(422)
       end
 
@@ -79,8 +71,7 @@ module Spree
 
         let(:address) do
           {
-            firstname:  'John',
-            lastname:   'Doe',
+            name:  'John Doe',
             address1:   '7735 Old Georgetown Road',
             city:       'Bethesda',
             phone:      '3014445002',
@@ -97,8 +88,8 @@ module Spree
               ship_address_attributes: address
             } }
           expect(json_response['state']).to eq('delivery')
-          expect(json_response['bill_address']['firstname']).to eq('John')
-          expect(json_response['ship_address']['firstname']).to eq('John')
+          expect(json_response['bill_address']['name']).to eq('John Doe')
+          expect(json_response['ship_address']['name']).to eq('John Doe')
           expect(response.status).to eq(200)
         end
 
@@ -136,9 +127,9 @@ module Spree
         put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { shipments_attributes: { "0" => { selected_shipping_rate_id: shipping_rate.id, id: shipment.id } } } }
         expect(response.status).to eq(200)
         # Find the correct shipment...
-        json_shipment = json_response['shipments'].detect { |s| s["id"] == shipment.id }
+        json_shipment = json_response['shipments'].detect { |value| value["id"] == shipment.id }
         # Find the correct shipping rate for that shipment...
-        json_shipping_rate = json_shipment['shipping_rates'].detect { |sr| sr["id"] == shipping_rate.id }
+        json_shipping_rate = json_shipment['shipping_rates'].detect { |value| value["id"] == shipping_rate.id }
         # ... And finally ensure that it's selected
         expect(json_shipping_rate['selected']).to be true
         # Order should automatically transfer to payment because all criteria are met
@@ -176,6 +167,7 @@ module Spree
       end
 
       describe 'setting the payment amount' do
+        let(:order) { create(:order_with_line_items, state: :payment) }
         let(:params) do
           {
             order_token: order.guest_token,
@@ -315,15 +307,41 @@ module Spree
             }
           end
 
+          before do
+            expect(Spree::Deprecation).to receive(:warn).
+              with(/^Passing existing_card_id to PaymentCreate is deprecated/, any_args)
+          end
+
           it 'succeeds' do
-            Spree::Deprecation.silence do
-              put spree.api_checkout_path(order), params: params
-            end
+            put spree.api_checkout_path(order), params: params
 
             expect(response.status).to eq 200
             expect(order.credit_cards).to match_array [credit_card]
           end
         end
+      end
+
+      it "cannot update attributes of another step" do
+        order.update_column(:state, "payment")
+
+        params = {
+          order_token: order.guest_token,
+          order: {
+            payments_attributes: [
+              {
+                payment_method_id: @payment_method.id.to_s,
+                source_attributes: attributes_for(:credit_card)
+              }
+            ],
+            ship_address_attributes: {
+              zipcode: 'MALICIOUS ZIPCODE'
+            }
+          }
+        }
+        expect do
+          put spree.api_checkout_path(order), params: params
+        end.not_to change { order.reload.ship_address.zipcode }
+        expect(response.status).to eq(200)
       end
 
       it "returns the order if the order is already complete" do
@@ -332,11 +350,15 @@ module Spree
         assert_unauthorized!
       end
 
-      # Regression test for https://github.com/spree/spree/issues/3784
-      it "can update the special instructions for an order" do
-        instructions = "Don't drop it. (Please)"
-        put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { special_instructions: instructions } }
-        expect(json_response['special_instructions']).to eql(instructions)
+      context "in delivery state" do
+        let(:order) { create(:order_with_line_items, state: :delivery) }
+
+        # Regression test for https://github.com/spree/spree/issues/3784
+        it "can update the special instructions for an order" do
+          instructions = "Don't drop it. (Please)"
+          put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { special_instructions: instructions } }
+          expect(json_response['special_instructions']).to eql(instructions)
+        end
       end
 
       context "as an admin" do
@@ -344,15 +366,15 @@ module Spree
         it "can assign a user to the order" do
           user = create(:user)
           # Need to pass email as well so that validations succeed
-          put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { user_id: user.id, email: "guest@spreecommerce.com" } }
+          put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { user_id: user.id, email: "guest@solidus.io" } }
           expect(response.status).to eq(200)
           expect(json_response['user_id']).to eq(user.id)
         end
       end
 
       it "can assign an email to the order" do
-        put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { email: "guest@spreecommerce.com" } }
-        expect(json_response['email']).to eq("guest@spreecommerce.com")
+        put spree.api_checkout_path(order.to_param), params: { order_token: order.guest_token, order: { email: "guest@solidus.io" } }
+        expect(json_response['email']).to eq("guest@solidus.io")
         expect(response.status).to eq(200)
       end
 
@@ -378,14 +400,14 @@ module Spree
       let!(:order) { create(:order_with_line_items) }
       it "cannot transition to address without a line item" do
         order.line_items.delete_all
-        order.update_column(:email, "spree@example.com")
+        order.update_column(:email, "solidus@example.com")
         put spree.next_api_checkout_path(order), params: { order_token: order.guest_token }
         expect(response.status).to eq(422)
         expect(json_response["errors"]["base"]).to include(I18n.t('spree.there_are_no_items_for_this_order'))
       end
 
       it "can transition an order to the next state" do
-        order.update_column(:email, "spree@example.com")
+        order.update_column(:email, "solidus@example.com")
 
         put spree.next_api_checkout_path(order), params: { order_token: order.guest_token }
         expect(response.status).to eq(200)
@@ -397,7 +419,6 @@ module Spree
           state: 'address',
           email: nil
         )
-
         put spree.next_api_checkout_path(order), params: { id: order.to_param, order_token: order.guest_token }
         expect(response.status).to eq(422)
         expect(json_response['error']).to match(/could not be transitioned/)
@@ -438,6 +459,19 @@ module Spree
             subject
             expect(response.status).to eq(400)
             expect(json_response['errors']['expected_total']).to include(I18n.t('spree.api.order.expected_total_mismatch'))
+          end
+        end
+
+        context 'when cannot complete' do
+          let(:order) { create(:order) }
+
+          before { order.update(state: 'cart') }
+
+          it 'returns a state machine error' do
+            subject
+
+            expect(json_response['error']).to eq(I18n.t(:could_not_transition, scope: "spree.api", resource: 'order'))
+            expect(response.status).to eq(422)
           end
         end
       end

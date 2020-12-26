@@ -5,7 +5,7 @@ require 'spree/testing_support/order_walkthrough'
 
 RSpec.describe Spree::Order, type: :model do
   let!(:store) { create(:store) }
-  let(:order) { Spree::Order.new(store: store) }
+  let(:order) { create(:order, store: store) }
 
   def assert_state_changed(order, from, to)
     state_change_exists = order.state_changes.where(previous_state: from, next_state: to).exists?
@@ -139,8 +139,9 @@ RSpec.describe Spree::Order, type: :model do
           it_behaves_like "it references the user's the default address" do
             let(:address_kind) { :ship }
             before do
+              order.ship_address = nil
               order.user = FactoryBot.create(:user)
-              order.user.default_address = default_address
+              order.user.ship_address = default_address
               order.next!
               order.reload
             end
@@ -149,8 +150,9 @@ RSpec.describe Spree::Order, type: :model do
           it_behaves_like "it references the user's the default address" do
             let(:address_kind) { :bill }
             before do
+              order.bill_address = nil
               order.user = FactoryBot.create(:user)
-              order.user.default_address = default_address
+              order.user.bill_address = default_address
               order.next!
               order.reload
             end
@@ -204,6 +206,7 @@ RSpec.describe Spree::Order, type: :model do
       end
 
       it "does not call persist_order_address if there is no address on the order" do
+        order.bill_address = nil
         order.user = FactoryBot.create(:user)
         order.save!
 
@@ -278,10 +281,8 @@ RSpec.describe Spree::Order, type: :model do
     end
 
     context "from delivery", partial_double_verification: false do
-      let(:ship_address) { FactoryBot.create(:ship_address) }
 
       before do
-        order.ship_address = ship_address
         order.state = 'delivery'
         allow(order).to receive(:apply_shipping_promotions)
         allow(order).to receive(:ensure_available_shipping_rates) { true }
@@ -301,6 +302,16 @@ RSpec.describe Spree::Order, type: :model do
           order.next!
           assert_state_changed(order, 'delivery', 'payment')
           expect(order.state).to eq('payment')
+        end
+
+        it 'fails if billing address is required and missing' do
+          payment_method = create(:payment_method)
+          allow(payment_method).to receive(:billing_address_required?).and_return(true)
+          allow(order).to receive(:available_payment_methods).and_return([payment_method])
+          order.bill_address = nil
+          allow(Spree::Config).to receive(:billing_address_required).and_return(true)
+
+          expect { order.next! }.to raise_error(StateMachines::InvalidTransition, /#{I18n.t('spree.bill_address_required')}/)
         end
       end
 
@@ -358,7 +369,8 @@ RSpec.describe Spree::Order, type: :model do
       let(:default_credit_card) { create(:credit_card) }
 
       before do
-        user = create(:user, email: 'spree@example.org', bill_address: user_bill_address)
+        user = create(:user, email: 'solidus@example.org', bill_address: user_bill_address)
+        default_credit_card.update(user: user)
         wallet_payment_source = user.wallet.add(default_credit_card)
         user.wallet.default_wallet_payment_source = wallet_payment_source
         order.user = user
@@ -449,13 +461,13 @@ RSpec.describe Spree::Order, type: :model do
     context "out of stock" do
       before do
         order.user = FactoryBot.create(:user)
-        order.email = 'spree@example.org'
+        order.email = 'solidus@example.org'
         order.payments << FactoryBot.create(:payment)
         allow(order).to receive_messages(payment_required?: true)
         order.line_items << FactoryBot.create(:line_item)
         order.line_items.first.variant.stock_items.each do |si|
           si.set_count_on_hand(0)
-          si.update_attributes(backorderable: false)
+          si.update(backorderable: false)
         end
 
         Spree::OrderUpdater.new(order).update
@@ -476,7 +488,7 @@ RSpec.describe Spree::Order, type: :model do
     context "no inventory units" do
       before do
         order.user = FactoryBot.create(:user)
-        order.email = 'spree@example.com'
+        order.email = 'solidus@example.com'
         order.payments << FactoryBot.create(:payment)
         allow(order).to receive_messages(payment_required?: true)
         allow(order).to receive(:ensure_available_shipping_rates) { true }
@@ -497,12 +509,7 @@ RSpec.describe Spree::Order, type: :model do
 
     context "with a payment in the pending state" do
       let(:order) { create :order_ready_to_complete }
-      let(:payment) { create :payment, state: "pending", amount: order.total }
-
-      before do
-        order.payments = [payment]
-        order.save!
-      end
+      let(:payment) { create :payment, order: order, state: "pending", amount: order.total }
 
       it "allows the order to complete" do
         expect { order.complete! }.
@@ -514,7 +521,7 @@ RSpec.describe Spree::Order, type: :model do
 
     context "exchange order completion" do
       before do
-        order.email = 'spree@example.org'
+        order.email = 'solidus@example.org'
         order.payments << FactoryBot.create(:payment)
         order.shipments.create!
         allow(order).to receive_messages(payment_required?: true)
@@ -524,7 +531,8 @@ RSpec.describe Spree::Order, type: :model do
       context 'when the line items are not available' do
         before do
           order.line_items << FactoryBot.create(:line_item)
-          order.store = FactoryBot.build(:store)
+          order.store = FactoryBot.create(:store)
+
           Spree::OrderUpdater.new(order).update
 
           order.save!
@@ -541,8 +549,8 @@ RSpec.describe Spree::Order, type: :model do
       before do
         order.user = FactoryBot.create(:user)
         order.store = FactoryBot.create(:store)
-        order.email = 'spree@example.org'
-        order.payments << FactoryBot.create(:payment)
+        order.email = 'solidus@example.org'
+        order.payments << FactoryBot.create(:payment, order: order)
 
         # make sure we will actually capture a payment
         allow(order).to receive_messages(payment_required?: true)
@@ -571,7 +579,7 @@ RSpec.describe Spree::Order, type: :model do
     context "a payment fails during processing", partial_double_verification: false do
       before do
         order.user = FactoryBot.create(:user)
-        order.email = 'spree@example.org'
+        order.email = 'solidus@example.org'
         payment = FactoryBot.create(:payment)
         allow(payment).to receive(:process!).and_raise(Spree::Core::GatewayError.new('processing failed'))
         order.line_items.each { |li| li.inventory_units.create! }
@@ -625,7 +633,7 @@ RSpec.describe Spree::Order, type: :model do
     it "should not keep old events when checkout_flow is redefined" do
       state_machine = Spree::Order.state_machine
       expect(state_machine.states.any? { |s| s.name == :address }).to be false
-      known_states = state_machine.events[:next].branches.map(&:known_states).flatten
+      known_states = state_machine.events[:next].branches.flat_map(&:known_states)
       expect(known_states).not_to include(:address)
       expect(known_states).not_to include(:delivery)
       expect(known_states).not_to include(:confirm)

@@ -1,17 +1,11 @@
 # frozen_string_literal: true
 
-require 'discard'
-
 module Spree
   class StockItem < Spree::Base
-    acts_as_paranoid
-    include Spree::ParanoiaDeprecations
+    include Spree::SoftDeletable
 
-    include Discard::Model
-    self.discard_column = :deleted_at
-
-    belongs_to :stock_location, class_name: 'Spree::StockLocation', inverse_of: :stock_items
-    belongs_to :variant, -> { with_deleted }, class_name: 'Spree::Variant', inverse_of: :stock_items
+    belongs_to :stock_location, class_name: 'Spree::StockLocation', inverse_of: :stock_items, optional: true
+    belongs_to :variant, -> { with_discarded }, class_name: 'Spree::Variant', inverse_of: :stock_items, optional: true
     has_many :stock_movements, inverse_of: :stock_item
 
     validates :stock_location, :variant, presence: true
@@ -111,7 +105,7 @@ module Spree
     def should_touch_variant?
       # the variant_id changes from nil when a new stock location is added
       inventory_cache_threshold &&
-        (saved_change_to_count_on_hand && saved_change_to_count_on_hand.any? { |c| c < inventory_cache_threshold }) ||
+        (saved_change_to_count_on_hand&.any? { |cache| cache < inventory_cache_threshold }) ||
         saved_change_to_variant_id?
     end
 

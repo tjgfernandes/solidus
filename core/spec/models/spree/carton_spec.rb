@@ -5,6 +5,14 @@ require 'rails_helper'
 RSpec.describe Spree::Carton do
   let(:carton) { create(:carton) }
 
+  describe 'shipping method' do
+    it 'returns soft deleted shipping method' do
+      carton = create(:carton)
+      carton.shipping_method.discard
+      expect(carton.reload.shipping_method).to be_present
+    end
+  end
+
   describe "#create" do
     subject { carton }
 
@@ -73,8 +81,8 @@ RSpec.describe Spree::Carton do
     let(:email) { 'something@something.com' }
 
     before do
-      first_order.update_attributes!(email: email)
-      second_order.update_attributes!(email: email)
+      first_order.update!(email: email)
+      second_order.update!(email: email)
     end
 
     it "returns a unique list of the order emails it is associated to" do

@@ -55,11 +55,12 @@ module Spree
       # below scope would be something like ["$10 - $15", "$15 - $18", "$18 - $20"]
       #
       Spree::Product.add_search_scope :price_range_any do |*opts|
-        conds = opts.map { |o| Spree::Core::ProductFilters.price_filter[:conds][o] }.reject(&:nil?)
+        conds = opts.map { |element| Spree::Core::ProductFilters.price_filter[:conds][element] }.reject(&:nil?)
         scope = conds.shift
         conds.each do |new_scope|
           scope = scope.or(new_scope)
         end
+
         Spree::Product.joins(master: :default_price).where(scope)
       end
 
@@ -68,17 +69,17 @@ module Spree
       end
 
       def self.price_filter
-        v = Spree::Price.arel_table
-        conds = [[I18n.t('spree.under_price', price: format_price(10)), v[:amount].lteq(10)],
-                 ["#{format_price(10)} - #{format_price(15)}", v[:amount].in(10..15)],
-                 ["#{format_price(15)} - #{format_price(18)}", v[:amount].in(15..18)],
-                 ["#{format_price(18)} - #{format_price(20)}", v[:amount].in(18..20)],
-                 [I18n.t('spree.or_over_price', price: format_price(20)), v[:amount].gteq(20)]]
+        value = Spree::Price.arel_table
+        conds = [[I18n.t('spree.under_price', price: format_price(10)), value[:amount].lteq(10)],
+                 ["#{format_price(10)} - #{format_price(15)}", value[:amount].between(10..15)],
+                 ["#{format_price(15)} - #{format_price(18)}", value[:amount].between(15..18)],
+                 ["#{format_price(18)} - #{format_price(20)}", value[:amount].between(18..20)],
+                 [I18n.t('spree.or_over_price', price: format_price(20)), value[:amount].gteq(20)]]
         {
           name:   I18n.t('spree.price_range'),
           scope:  :price_range_any,
           conds:  Hash[*conds.flatten],
-          labels: conds.map { |k, _v| [k, k] }
+          labels: conds.map { |key, _value| [key, key] }
         }
       end
 
@@ -95,7 +96,7 @@ module Spree
       #   being blank: note that this relies on with_property doing a left outer join
       #   rather than an inner join.
       Spree::Product.add_search_scope :brand_any do |*opts|
-        conds = opts.map { |o| ProductFilters.brand_filter[:conds][o] }.reject(&:nil?)
+        conds = opts.map { |value| ProductFilters.brand_filter[:conds][value] }.reject(&:nil?)
         scope = conds.shift
         conds.each do |new_scope|
           scope = scope.or(new_scope)
@@ -107,12 +108,12 @@ module Spree
         brand_property = Spree::Property.find_by(name: 'brand')
         brands = brand_property ? Spree::ProductProperty.where(property_id: brand_property.id).pluck(:value).uniq.map(&:to_s) : []
         pp = Spree::ProductProperty.arel_table
-        conds = Hash[*brands.map { |b| [b, pp[:value].eq(b)] }.flatten]
+        conds = Hash[*brands.flat_map { |brand| [brand, pp[:value].eq(brand)] }]
         {
           name:   'Brands',
           scope:  :brand_any,
           conds:  conds,
-          labels: brands.sort.map { |k| [k, k] }
+          labels: brands.sort.map { |key| [key, key] }
         }
       end
 
@@ -149,7 +150,7 @@ module Spree
         {
           name:   'Applicable Brands',
           scope:  :selective_brand_any,
-          labels: brands.sort.map { |k| [k, k] }
+          labels: brands.sort.map { |key| [key, key] }
         }
       end
 
@@ -171,7 +172,7 @@ module Spree
         {
           name:   'Taxons under ' + taxon.name,
           scope:  :taxons_id_in_tree_any,
-          labels: taxon.children.sort_by(&:position).map { |t| [t.name, t.id] },
+          labels: taxon.children.sort_by(&:position).map { |element| [element.name, element.id] },
           conds:  nil
         }
       end
@@ -184,11 +185,11 @@ module Spree
       # idea: expand the format to allow nesting of labels?
       def self.all_taxons
         Spree::Deprecation.warn "all_taxons is deprecated in solidus_core. Please add it to your own application to continue using it."
-        taxons = Spree::Taxonomy.all.map { |t| [t.root] + t.root.descendants }.flatten
+        taxons = Spree::Taxonomy.all.flat_map { |element| [element.root] + element.root.descendants }
         {
           name:   'All taxons',
           scope:  :taxons_id_equals_any,
-          labels: taxons.sort_by(&:name).map { |t| [t.name, t.id] },
+          labels: taxons.sort_by(&:name).map { |element| [element.name, element.id] },
           conds:  nil # not needed
         }
       end

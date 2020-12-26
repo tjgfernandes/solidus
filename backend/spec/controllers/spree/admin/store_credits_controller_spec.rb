@@ -193,7 +193,7 @@ describe Spree::Admin::StoreCreditsController do
       let(:updated_amount) { 300.0 }
 
       context "the store credit has been partially used" do
-        before { store_credit.update_attributes(amount_used: 10.0) }
+        before { store_credit.update(amount_used: 10.0) }
 
         context "the new amount is greater than the used amount" do
           let(:updated_amount) { 11.0 }
@@ -306,6 +306,14 @@ describe Spree::Admin::StoreCreditsController do
       it "redirects to index" do
         expect(subject).to redirect_to spree.admin_user_store_credit_path(user, store_credit)
       end
+    end
+  end
+  context 'User does not exist' do
+    let(:store_credit) { create(:store_credit, user: user, category: a_credit_category) }
+    it "cannot find a store-credit for non-existent user" do
+      get :index, params: { user_id: 'non-existent-user', id: store_credit.id }
+      expect(response).to redirect_to(spree.admin_users_path)
+      expect(flash[:error]).to eql("User is not found")
     end
   end
 end

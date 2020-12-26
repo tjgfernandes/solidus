@@ -62,7 +62,7 @@ RSpec.describe Spree::UserMethods do
 
   describe '#available_store_credit_total' do
     subject do
-      test_user.available_store_credit_total(currency: 'USD')
+      test_user.reload.available_store_credit_total(currency: 'USD')
     end
 
     context 'when the user does not have any credit' do
@@ -76,25 +76,26 @@ RSpec.describe Spree::UserMethods do
       it { is_expected.to eq(100 + 200) }
 
       context 'when some has been used' do
-        before { credit_1.update_attributes!(amount_used: 35) }
+        before { credit_1.update!(amount_used: 35) }
 
         it { is_expected.to eq(100 + 200 - 35) }
 
         context 'when some has been authorized' do
-          before { credit_1.update_attributes!(amount_authorized: 10) }
+          before { credit_1.update!(amount_authorized: 10) }
 
           it { is_expected.to eq(100 + 200 - 35 - 10) }
         end
       end
 
       context 'when some has been authorized' do
-        before { credit_1.update_attributes!(amount_authorized: 10) }
+        before { credit_1.update!(amount_authorized: 10) }
 
         it { is_expected.to eq(100 + 200 - 10) }
       end
 
       context 'with credits of multiple currencies' do
         let!(:credit_3) { create(:store_credit, user: test_user, amount: 400, currency: 'GBP') }
+        before { test_user.reload }
 
         it 'separates the currencies' do
           expect(test_user.available_store_credit_total(currency: 'USD')).to eq(100 + 200)

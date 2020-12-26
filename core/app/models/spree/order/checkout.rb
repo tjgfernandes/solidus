@@ -41,7 +41,7 @@ module Spree
           # On first definition, state_machines will not be defined
           state_machines.clear if respond_to?(:state_machines)
           state_machine :state, initial: :cart, use_transactions: false do
-            klass.next_event_transitions.each { |t| transition(t.merge(on: :next)) }
+            klass.next_event_transitions.each { |state| transition(state.merge(on: :next)) }
 
             # Persist the state on the order
             after_transition do |order, transition|
@@ -82,6 +82,7 @@ module Spree
 
               after_transition to: :complete, do: :add_payment_sources_to_wallet
               before_transition to: :payment, do: :add_default_payment_from_wallet
+              before_transition to: :payment, do: :ensure_billing_address
 
               before_transition to: :confirm, do: :add_store_credit_payments
 

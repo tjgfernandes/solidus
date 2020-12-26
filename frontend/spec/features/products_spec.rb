@@ -51,20 +51,20 @@ describe "Visiting Products", type: :feature, inaccessible: true do
     end
 
     it 'displays metas' do
-      jersey.update_attributes metas
+      jersey.update metas
       click_link jersey.name
       expect(page).to have_meta(:description, 'Brand new Ruby on Rails Jersey')
       expect(page).to have_meta(:keywords, 'ror, jersey, ruby')
     end
 
     it 'displays title if set' do
-      jersey.update_attributes metas
+      jersey.update metas
       click_link jersey.name
       expect(page).to have_title('Ruby on Rails Baseball Jersey Buy High Quality Geek Apparel')
     end
 
     it "doesn't use meta_title as heading on page" do
-      jersey.update_attributes metas
+      jersey.update metas
       click_link jersey.name
       within("h1") do
         expect(page).to have_content(jersey.name)
@@ -73,7 +73,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
     end
 
     it 'uses product name in title when meta_title set to empty string' do
-      jersey.update_attributes meta_title: ''
+      jersey.update meta_title: ''
       click_link jersey.name
       expect(page).to have_title('Ruby on Rails Baseball Jersey - ' + store_name)
     end
@@ -93,7 +93,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
 
   context "using Russian Rubles as a currency" do
     before do
-      Spree::Config[:currency] = "RUB"
+      stub_spree_preferences(currency: "RUB")
     end
 
     let!(:product) do
@@ -154,7 +154,9 @@ describe "Visiting Products", type: :feature, inaccessible: true do
 
     before do
       # Need to have two images to trigger the error
-      image = File.open(File.expand_path('../fixtures/thinking-cat.jpg', __dir__))
+      image = File.open(
+        File.join(Spree::Core::Engine.root, "lib", "spree", "testing_support", "fixtures", "blank.jpg")
+      )
       product.images.create!(attachment: image)
       product.images.create!(attachment: image)
 
@@ -184,7 +186,9 @@ describe "Visiting Products", type: :feature, inaccessible: true do
     let(:product) { Spree::Product.find_by(name: "Ruby on Rails Baseball Jersey") }
 
     before do
-      image = File.open(File.expand_path('../fixtures/thinking-cat.jpg', __dir__))
+      image = File.open(
+        File.join(Spree::Core::Engine.root, "lib", "spree", "testing_support", "fixtures", "blank.jpg")
+      )
       v1 = product.variants.create!(price: 9.99)
       v2 = product.variants.create!(price: 10.99)
       v1.images.create!(attachment: image)
@@ -193,14 +197,14 @@ describe "Visiting Products", type: :feature, inaccessible: true do
 
     it "should not display no image available" do
       visit spree.root_path
-      expect(page).to have_xpath("//img[contains(@src,'thinking-cat')]")
+      expect(page).to have_xpath("//img[contains(@src,'blank')]")
     end
   end
 
   it "should be able to hide products without price" do
     expect(page.all('ul.product-listing li').size).to eq(9)
-    Spree::Config.show_products_without_price = false
-    Spree::Config.currency = "CAN"
+    stub_spree_preferences(show_products_without_price: false)
+    stub_spree_preferences(currency: "CAN")
     visit spree.root_path
     expect(page.all('ul.product-listing li').size).to eq(0)
   end
@@ -218,13 +222,13 @@ describe "Visiting Products", type: :feature, inaccessible: true do
     within(:css, '#sidebar_products_search') { click_button "Search" }
 
     expect(page.all('ul.product-listing li').size).to eq(3)
-    tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+    tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
     tmp.delete("")
     expect(tmp.sort!).to eq(["Ruby on Rails Mug", "Ruby on Rails Stein", "Ruby on Rails Tote"])
   end
 
   it "should be able to display products priced between 15 and 18 dollars across multiple pages" do
-    Spree::Config.products_per_page = 2
+    stub_spree_preferences(products_per_page: 2)
     within(:css, '#taxonomies') { click_link "Ruby on Rails" }
     check "Price_Range_$15.00_-_$18.00"
     within(:css, '#sidebar_products_search') { click_button "Search" }
@@ -245,7 +249,7 @@ describe "Visiting Products", type: :feature, inaccessible: true do
     within(:css, '#sidebar_products_search') { click_button "Search" }
 
     expect(page.all('ul.product-listing li').size).to eq(4)
-    tmp = page.all('ul.product-listing li a').map(&:text).flatten.compact
+    tmp = page.all('ul.product-listing li a').flat_map(&:text).compact
     tmp.delete("")
     expect(tmp.sort!).to eq(["Ruby on Rails Bag",
                              "Ruby on Rails Baseball Jersey",
@@ -263,8 +267,8 @@ describe "Visiting Products", type: :feature, inaccessible: true do
 
   it "shouldn't be able to put a product without a current price in the cart" do
     product = FactoryBot.create(:base_product, description: nil, name: 'Sample', price: '19.99')
-    Spree::Config.currency = "CAN"
-    Spree::Config.show_products_without_price = true
+    stub_spree_preferences(currency: "CAN")
+    stub_spree_preferences(show_products_without_price: true)
     visit spree.product_path(product)
     expect(page).to have_content "This product is not available in the selected currency."
     expect(page).not_to have_content "add-to-cart-button"
@@ -272,8 +276,8 @@ describe "Visiting Products", type: :feature, inaccessible: true do
 
   it "should be able to list products without a price" do
     product = FactoryBot.create(:base_product, description: nil, name: 'Sample', price: '19.99')
-    Spree::Config.currency = "CAN"
-    Spree::Config.show_products_without_price = true
+    stub_spree_preferences(currency: "CAN")
+    stub_spree_preferences(show_products_without_price: true)
     visit spree.products_path
     expect(page).to have_content(product.name)
   end

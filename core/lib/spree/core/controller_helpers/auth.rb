@@ -11,7 +11,7 @@ module Spree
         # @!attribute [rw] unauthorized_redirect
         #   @!scope class
         #   Extension point for overriding behaviour of access denied errors.
-        #   Default behaviour is to redirect to "/unauthorized" with a flash
+        #   Default behaviour is to redirect back or to "/unauthorized" with a flash
         #   message.
         #   @return [Proc] action to take when access denied error is raised.
 
@@ -22,7 +22,20 @@ module Spree
           class_attribute :unauthorized_redirect
           self.unauthorized_redirect = -> do
             flash[:error] = I18n.t('spree.authorization_failure')
-            redirect_to "/unauthorized"
+            if Spree::Config.redirect_back_on_unauthorized
+              redirect_back(fallback_location: "/unauthorized")
+            else
+              Spree::Deprecation.warn <<-WARN.strip_heredoc, caller
+                Having Spree::Config.redirect_back_on_unauthorized set
+                to `false` is deprecated and will not be supported in Solidus 3.0.
+
+                Please change this configuration to `true` and be sure that your
+                application does not break trying to redirect back when there is
+                an unauthorized access.
+              WARN
+
+              redirect_to "/unauthorized"
+            end
           end
 
           rescue_from CanCan::AccessDenied do
@@ -42,27 +55,15 @@ module Spree
 
         def set_guest_token
           unless cookies.signed[:guest_token].present?
-            cookies.permanent.signed[:guest_token] = {
+            cookies.permanent.signed[:guest_token] = Spree::Config[:guest_token_cookie_options].merge(
               value: SecureRandom.urlsafe_base64(nil, false),
               httponly: true
-            }
+            )
           end
         end
 
         def store_location
-          # disallow return to login, logout, signup pages
-          authentication_routes = [:spree_signup_path, :spree_login_path, :spree_logout_path]
-          disallowed_urls = []
-          authentication_routes.each do |route|
-            if respond_to?(route)
-              disallowed_urls << send(route)
-            end
-          end
-
-          disallowed_urls.map!{ |url| url[/\/\w+$/] }
-          unless disallowed_urls.include?(request.fullpath)
-            session['spree_user_return_to'] = request.fullpath.gsub('//', '/')
-          end
+          Spree::UserLastUrlStorer.new(self).store_location
         end
 
         # proxy method to *possible* spree_current_user method

@@ -3,6 +3,8 @@ Spree.Views.Stock.EditStockItemRow = Backbone.View.extend({
 
   initialize: function(options) {
     this.stockLocationName = options.stockLocationName;
+    this.stockLocationId = options.stockLocationId;
+    this.variantSku = options.variantSku;
     this.negative = this.model.attributes.count_on_hand < 0;
     this.previousAttributes = _.clone(this.model.attributes);
     this.listenTo(this.model, 'sync', this.onSuccess);
@@ -13,7 +15,8 @@ Spree.Views.Stock.EditStockItemRow = Backbone.View.extend({
     "click .submit": "onSubmit",
     "submit form": "onSubmit",
     "click .cancel": "onCancel",
-    'input [name="count_on_hand"]': "countOnHandChanged"
+    'input [name="count_on_hand"]': "countOnHandChanged",
+    'input [name="backorderable"]': "backorderableChanged"
   },
 
   template: HandlebarsTemplates['stock_items/stock_location_stock_item'],
@@ -21,6 +24,8 @@ Spree.Views.Stock.EditStockItemRow = Backbone.View.extend({
   render: function() {
     var renderAttr = {
       stockLocationName: this.stockLocationName,
+      stockLocationId: this.stockLocationId,
+      variantSku: this.variantSku,
       editing: this.editing,
       negative: this.negative
     };
@@ -43,6 +48,20 @@ Spree.Views.Stock.EditStockItemRow = Backbone.View.extend({
     this.render();
   },
 
+  onChange: function() {
+    var count_on_hand_changed = this.previousAttributes.count_on_hand != this.model.attributes.count_on_hand;
+    var backorderable_changed = this.previousAttributes.backorderable != this.model.attributes.backorderable;
+    var changed = count_on_hand_changed || backorderable_changed;
+
+    this.$el.toggleClass('changed', changed);
+  },
+
+  backorderableChanged: function(ev) {
+    this.model.set("backorderable", ev.target.checked);
+
+    this.onChange();
+  },
+
   countOnHandChanged: function(ev) {
     var diff = parseInt(ev.currentTarget.value), newCount;
     if (isNaN(diff)) diff = 0;
@@ -56,7 +75,8 @@ Spree.Views.Stock.EditStockItemRow = Backbone.View.extend({
       this.model.set("count_on_hand", newCount);
       this.$count_on_hand_display.text(newCount);
     }
-    this.$el.toggleClass('changed', diff !== 0);
+
+    this.onChange();
   },
 
   onSuccess: function() {

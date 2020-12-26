@@ -93,9 +93,9 @@ module Spree
         it 'returns only requested ids' do
           # We need a completly new branch to avoid having parent that can be preloaded from the rails ancestors
           python   = create(:taxon, name: "Python", parent: taxonomy.root, taxonomy: taxonomy)
-          python_3 = create(:taxon, name: "3.0", parent: python, taxonomy: taxonomy)
+          python_three = create(:taxon, name: "3.0", parent: python, taxonomy: taxonomy)
 
-          get spree.api_taxons_path, params: { ids: [rails_v3_2_2.id, python_3.id] }
+          get spree.api_taxons_path, params: { ids: [rails_v3_2_2.id, python_three.id] }
 
           expect(json_response['taxons'].size).to eq 2
         end
@@ -189,7 +189,7 @@ module Spree
       end
 
       it "cannot create a new taxon with invalid attributes" do
-        post spree.api_taxonomy_taxons_path(taxonomy), params: { taxon: { foo: :bar } }
+        post spree.api_taxonomy_taxons_path(taxonomy), params: { taxon: { name: '' } }
         expect(response.status).to eq(422)
         expect(json_response["error"]).to eq("Invalid resource. Please fix errors and try again.")
 

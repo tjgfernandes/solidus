@@ -4,7 +4,7 @@ module Spree
   module Admin
     class BaseController < Spree::BaseController
       helper 'spree/admin/navigation'
-      layout '/spree/layouts/admin'
+      layout 'spree/layouts/admin'
 
       before_action :authorize_admin
 
@@ -61,6 +61,12 @@ module Spree
 
       def order_mutex_redirect_path
         edit_admin_order_path(@order)
+      end
+
+      def resource_not_found(flash_class:, redirect_url:)
+        flash[:error] = flash_message_for(flash_class.new, :not_found)
+        redirect_to redirect_url
+        nil
       end
     end
   end

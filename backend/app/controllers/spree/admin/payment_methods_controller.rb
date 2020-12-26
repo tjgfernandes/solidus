@@ -28,13 +28,13 @@ module Spree
         invoke_callbacks(:update, :before)
 
         attributes = payment_method_params
-        attributes.each do |k, _v|
-          if k.include?("password") && attributes[k].blank?
-            attributes.delete(k)
+        attributes.each do |key, _value|
+          if key.include?("password") && attributes[key].blank?
+            attributes.delete(key)
           end
         end
 
-        if @payment_method.update_attributes(attributes)
+        if @payment_method.update(attributes)
           invoke_callbacks(:update, :after)
           flash[:success] = t('spree.successfully_updated', resource: t('spree.payment_method'))
           redirect_to edit_admin_payment_method_path(@payment_method)
